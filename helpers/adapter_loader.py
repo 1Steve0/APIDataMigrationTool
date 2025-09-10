@@ -16,16 +16,28 @@ def run_php_adapter(adapter_path, input_file):
             ['php', adapter_path, input_file],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # 👈 This is the key fix
             check=True
         )
         output = result.stdout.strip()
-        return json.loads(output)
+
+        try:
+            return json.loads(output)
+        except json.JSONDecodeError as e:
+            return {
+                "error": "Adapter did not return valid JSON",
+                "details": str(e),
+                "stdout": output,
+                "stderr": result.stderr
+            }
 
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Adapter execution failed: {e.stderr.strip()}")
-
-    except json.JSONDecodeError:
-        raise ValueError("Adapter did not return valid JSON")
+        return {
+            "error": "Adapter execution failed",
+            "details": str(e),
+            "stdout": e.stdout,
+            "stderr": e.stderr
+        }
 
 def validate_adapter_output(data):
     """
@@ -33,9 +45,6 @@ def validate_adapter_output(data):
     """
     if not isinstance(data, dict):
         raise TypeError("Adapter output must be a JSON object")
-
-    if data.get("status") != "success":
-        raise ValueError(f"Adapter error: {data.get('error', 'Unknown error')}")
 
     if "records" not in data or not isinstance(data["records"], list):
         raise ValueError("Adapter output missing 'records' list")

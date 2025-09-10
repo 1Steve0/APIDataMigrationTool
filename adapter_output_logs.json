@@ -1,0 +1,54 @@
+{
+    "recordCount": 6,
+    "generatedAt": "2025-09-10T03:22:42+00:00",
+    "records": [
+        {
+            "classificationType": "Postcode",
+            "deleted": false,
+            "description": "Group members by postcode",
+            "hierarchy": "/1000/",
+            "hierarchyLevel": 0,
+            "name": "Postcodes"
+        },
+        {
+            "classificationType": null,
+            "deleted": false,
+            "description": "Brisbane CBD",
+            "hierarchy": "/1000/1/",
+            "hierarchyLevel": 1,
+            "name": "4000"
+        },
+        {
+            "classificationType": null,
+            "deleted": false,
+            "description": "Brisbane Postal Boxes",
+            "hierarchy": "/1000/2/",
+            "hierarchyLevel": 1,
+            "name": "4001"
+        },
+        {
+            "classificationType": null,
+            "deleted": false,
+            "description": "Mansfield, Mt Gravatt",
+            "hierarchy": "/1000/3/",
+            "hierarchyLevel": 1,
+            "name": "4022"
+        },
+        {
+            "classificationType": null,
+            "deleted": false,
+            "description": "Red Hill",
+            "hierarchy": "/1000/4/",
+            "hierarchyLevel": 1,
+            "name": "4059"
+        },
+        {
+            "classificationType": null,
+            "deleted": false,
+            "description": "Capalaba",
+            "hierarchy": "/1000/5/",
+            "hierarchyLevel": 1,
+            "name": "4157"
+        }
+    ]
+}

@@ -60,3 +60,31 @@ button:hover {
   border-radius: 4px;
   font-size: 0.95rem;
 }
+
+.run-button {
+  background: linear-gradient(to right, #4caf50, #45a049);
+  color: white;
+  font-weight: bold;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.run-button:hover {
+  background: linear-gradient(to right, #45a049, #4caf50);
+  transform: scale(1.05);
+}
+fieldset.inline-options {
+  border: none;
+  padding: 0;
+  margin: 1em 0;
+}
+
+.inline-options label {
+  display: inline-block;
+  margin-right: 20px;
+  font-weight: bold;
+}
