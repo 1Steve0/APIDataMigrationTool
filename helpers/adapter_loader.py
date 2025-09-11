@@ -39,14 +39,21 @@ def run_php_adapter(adapter_path, input_file):
             "stderr": e.stderr
         }
 
-def validate_adapter_output(data):
-    """
-    Validates the structure of adapter output.
-    """
-    if not isinstance(data, dict):
-        raise TypeError("Adapter output must be a JSON object")
+def validate_adapter_output(parsed_output):
+    print("🔍 Parsed adapter output (truncated):", str(parsed_output)[:500])
 
-    if "records" not in data or not isinstance(data["records"], list):
+    if not isinstance(parsed_output, dict):
+        raise ValueError("Adapter output is not a dictionary")
+
+    if "records" not in parsed_output:
         raise ValueError("Adapter output missing 'records' list")
 
-    return data["records"]
+    records = parsed_output["records"]
+
+    # 🔍 Log each record's keys and values for validation clarity
+    for i, record in enumerate(records, start=1):
+        print(f"\n🔍 Record {i} keys: {list(record.keys())}")
+        for key in record:
+            print(f"    {key}: {record[key]} (type: {type(record[key])})")
+
+    return records
