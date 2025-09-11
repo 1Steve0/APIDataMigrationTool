@@ -48,7 +48,7 @@ class MigrationStats:
             writer.writerows(self.rows)
 
 def migrate_records(records, migration_type, api_url, auth_token, entity,
-                    purge_existing=False):
+                    purge_existing=False,):
     import requests, json
     stats = MigrationStats()
     headers = {
@@ -57,7 +57,6 @@ def migrate_records(records, migration_type, api_url, auth_token, entity,
     }
 
     print("📡 Posting to:", api_url)
-
     # === Optional Purge Step ===
     if purge_existing:
         try:
@@ -87,7 +86,7 @@ def migrate_records(records, migration_type, api_url, auth_token, entity,
         "documents": ["name"],
         "organisation": ["name"],
         "xStakeholder Classifications": [
-            "name", "hierarchyLevel", "hierarchy", "description", "deleted", "classificationType"
+            "name", "parentId", "dataVersion","description", "deleted", "classificationType"
         ]
     }
     required_fields = REQUIRED_FIELDS.get(entity, [])
@@ -114,22 +113,33 @@ def migrate_records(records, migration_type, api_url, auth_token, entity,
             stats.log_skip(i, record, f"Missing required fields {missing}")
             continue
 
-        # === Ensure ID is an integer ===
-        try:
-            record["id"] = int(record["id"])
-        except (ValueError, TypeError):
-            stats.log_skip(i, record, "Invalid 'id' format — must be integer")
-            continue
+        # === Ensure ID is an integer — only for update/upsert ===
+        if migration_type != "insert":
+            try:
+                record["id"] = int(record["id"])
+            except (ValueError, TypeError):
+                stats.log_skip(i, record, "Invalid 'id' format — must be integer")
+                continue
 
         try:
+            # === Wrap record in "values" payload ===
+            payload = {"values": record}
+
             # === Determine Endpoint and Method ===
             response = None
 
             if migration_type == "insert":
                 print(f"📤 Row {i} → {api_url}")
-                print(json.dumps(record, indent=2))
-                response = requests.post(api_url, json=record, headers=headers)
-
+                print(json.dumps(payload, indent=2))
+                response = requests.post(api_url, json=payload, headers=headers)
+                if response:
+                    print(f"📬 Response status: {response.status_code}")
+                    try:
+                        print(f"📬 Response JSON: {response.json()}")
+                    except Exception:
+                        print(f"📬 Response text: {response.text[:500]}")
+                else:
+                    print("📬 No response object returned")
             elif migration_type == "update":
                 record_id = record.get("id")
                 if not record_id:
@@ -137,8 +147,8 @@ def migrate_records(records, migration_type, api_url, auth_token, entity,
                     continue
                 patch_url = f"{api_url}/{record_id}"
                 print(f"📤 Row {i} → {patch_url}")
-                print(json.dumps(record, indent=2))
-                response = requests.patch(patch_url, json=record, headers=headers)
+                print(json.dumps(payload, indent=2))
+                response = requests.patch(patch_url, json=payload, headers=headers)
 
             elif migration_type == "upsert":
                 record_id = record.get("id")
@@ -149,25 +159,44 @@ def migrate_records(records, migration_type, api_url, auth_token, entity,
                 check = requests.get(patch_url, headers=headers)
                 if check.status_code == 404:
                     print(f"📤 Row {i} → {api_url}")
-                    print(json.dumps(record, indent=2))
-                    response = requests.post(api_url, json=record, headers=headers)
+                    print(json.dumps(payload, indent=2))
+                    response = requests.post(api_url, json=payload, headers=headers)
                 else:
                     print(f"📤 Row {i} → {patch_url}")
-                    print(json.dumps(record, indent=2))
-                    response = requests.patch(patch_url, json=record, headers=headers)
+                    print(json.dumps(payload, indent=2))
+                    response = requests.patch(patch_url, json=payload, headers=headers)
 
             else:
                 stats.log_skip(i, record, f"Unknown migration type '{migration_type}'")
                 continue
-
+            if response:
+                print("📦 Raw response headers:", response.headers)
             # === Handle Response ===
-            if response and response.status_code in [200, 201]:
-                stats.log_success(i, record)
+            if response and response.status_code in [200, 201, 204]:
+                print(f"📬 Response status: {response.status_code}")
+                print(f"📬 Response body: {response.text[:500]}")
+                try:
+                    response_data = response.json()
+                    if "error" in response_data or "errors" in response_data:
+                        reason = f"API responded with error: {json.dumps(response_data, indent=2)}"
+                        stats.log_skip(i, record, reason)
+                    else:
+                        record["id"] = response_data.get("id", "")
+                        stats.log_success(i, record)
+                except Exception as e:
+                    print(f"⚠️ Failed to parse JSON: {str(e)}")
+                    stats.log_success(i, record)
             else:
-                reason = f"API error {response.status_code} - {response.text}" if response else "No response"
+                reason = f"API responded with status {response.status_code} - {response.text[:500]}"
                 stats.log_skip(i, record, reason)
-
+      
         except Exception as e:
-            stats.log_skip(i, record, f"Exception during migration: {str(e)}")
-
+            print(f"⚠️ Failed to parse JSON: {str(e)}")
+            stats.log_success(i, record)
+        
+        print("📬 Raw response object:", response)
+        print("📬 Raw response status:", response.status_code if response else "No response")
+        print("📬 Raw response text:", response.text if response else "No response text")
+    print(f"✅ Migration stats so far: {stats.summary()}")
+    
     return stats.summary(), stats

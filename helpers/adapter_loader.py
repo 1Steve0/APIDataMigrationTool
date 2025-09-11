@@ -1,3 +1,4 @@
+# adapter_loader.py
 import subprocess
 import json
 import os
@@ -20,8 +21,10 @@ def run_php_adapter(adapter_path, input_file):
             check=True
         )
         output = result.stdout.strip()
-
+        output = output.lstrip('\ufeff').strip()
+        
         try:
+            print("📤 Raw adapter stdout:", output[:500])
             return json.loads(output)
         except json.JSONDecodeError as e:
             return {

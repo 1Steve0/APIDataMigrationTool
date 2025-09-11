@@ -12,6 +12,10 @@ if (!is_readable($inputPath)) {
 
 // === Load CSV ===
 $lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+// Print debug to stderr
+fwrite(STDERR, "📦 Php file read:\n");
+print_r($lines, true);
+
 if (count($lines) < 2) {
     echo json_encode(["error" => "CSV file is empty or malformed"]);
     exit(1);
@@ -24,7 +28,6 @@ $headerMap = [
     "description" => "description",
     "header" => "header",
 ];
-
 
 // === Normalize Header ===
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
@@ -40,40 +43,39 @@ if ($missing) {
     exit(1);
 }
 
-// === Extra Logic ===
-
 // === Build Records ===
 $records = [];
 foreach ($lines as $line) {
     $row = array_combine($normalizedHeader, array_map('trim', str_getcsv($line, ",", '"', "\\")));
-    if (!$row || !$row["name"]) continue;
-    // === Debug parentId ===
-    $classificationType = $row["header"],   #input is TRUE or FALSE -> change to 1 Header 2 for Child
-    // Normalize and convert to integer
-    if (strtoupper($classificationType) === "TRUE") {
-        $classificationType = 1; // Header
-        } else {
-        $classificationType = 2; // Child
+    if (!$row) {
+        fwrite(STDERR, "⚠️ Skipping malformed row: " . $line . "\n");
+        continue;
     }
-    
+    if (!isset($row["name"]) || trim($row["name"]) === "") {
+        fwrite(STDERR, "⚠️ Skipping row with empty name: " . json_encode($row) . "\n");
+        continue;
+    }
+
+    // Normalize classificationType
+    $classificationType = (strtoupper($row["header"]) === "TRUE") ? 1 : 2;
+
+    // Build record
     $records[] = [
         "classificationType" => $classificationType,
-        "dataVersion": 0,
+        "dataVersion" => 0,
         "deleted" => false,
         "description" => $row["description"] ?: null,
         "name" => $row["name"],
-        "parentId" => $row["parent_id"],
-
+        "parentId" => (int) $row["parent_id"]
     ];
 }
 
-// === Output JSON ===
+// === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
     "records" => $records
 ];
 
-file_put_contents("adapter_output_logs.json", json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-echo json_encode($output, JSON_UNESCAPED_SLASHES);
+echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 fwrite(STDERR, "✅ Adapter completed with {$output['recordCount']} records\n");
