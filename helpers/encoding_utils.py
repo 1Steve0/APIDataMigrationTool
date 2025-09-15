@@ -1,3 +1,4 @@
+#encoding_utils.py
 import requests
 
 def validate_credentials(email: str, password: str, base_url: str) -> bool:

@@ -17,14 +17,11 @@ def run_php_adapter(adapter_path, input_file):
             ['php', adapter_path, input_file],
             capture_output=True,
             text=True,
-            encoding="utf-8",  # 👈 This is the key fix
+            encoding="utf-8",
             check=True
         )
-        output = result.stdout.strip()
-        output = output.lstrip('\ufeff').strip()
-        
+        output = result.stdout.strip().lstrip('\ufeff')
         try:
-            print("📤 Raw adapter stdout:", output[:500])
             return json.loads(output)
         except json.JSONDecodeError as e:
             return {
@@ -41,10 +38,8 @@ def run_php_adapter(adapter_path, input_file):
             "stdout": e.stdout,
             "stderr": e.stderr
         }
-
+    
 def validate_adapter_output(parsed_output):
-    print("🔍 Parsed adapter output (truncated):", str(parsed_output)[:500])
-
     if not isinstance(parsed_output, dict):
         raise ValueError("Adapter output is not a dictionary")
 
@@ -53,10 +48,10 @@ def validate_adapter_output(parsed_output):
 
     records = parsed_output["records"]
 
-    # 🔍 Log each record's keys and values for validation clarity
-    for i, record in enumerate(records, start=1):
-        print(f"\n🔍 Record {i} keys: {list(record.keys())}")
-        for key in record:
-            print(f"    {key}: {record[key]} (type: {type(record[key])})")
+    # # 🔍 Log each record's keys and values for validation clarity
+    # for i, record in enumerate(records, start=1):
+    #     print(f"\n🔍 Record {i} keys: {list(record.keys())}")
+    #     for key in record:
+    #         print(f"    {key}: {record[key]} (type: {type(record[key])})")
 
     return records
