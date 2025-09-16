@@ -12,27 +12,16 @@ class MigrationStats:
         self.rows = [] 
         self.start_time = time.time()
 
-    def log_success(self, row_index, record):
+    def log_success(self, row_index, log_entry):
         self.success += 1
-        self.rows.append({
-            "row": row_index + 1,
-            "status": "Success",
-            "name": record.get("name", ""),
-            "id": record.get("id", ""),
-            "message": ""
-        })
+        self.rows.append(log_entry)
 
-    def log_skip(self, row_num, record, reason):
+    def log_skip(self, row_index, log_entry, reason):
         self.skipped += 1
-        self.errors.append(f"{record.get('name', f'Row {row_num}')}: {reason}")
-        self.rows.append({
-            "name": record.get("name", ""),
-            "parentId": record.get("parentId", ""),
-            "description": record.get("description", ""),
-            "status": "Skipped",
-            "response_id": None,
-            "error": reason
-        })
+        log_entry["reason"] = reason
+        log_entry["status"] = "Skipped"
+        self.errors.append(reason)
+        self.rows.append(log_entry)
 
     def summary(self):
         return {
@@ -58,7 +47,6 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         "Authorization": f"Bearer {auth_token}",
         "Content-Type": "application/json"
     }
-
     print("📡 Posting to:", api_url)
 
     # === Optional Purge Step ===
@@ -68,9 +56,27 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             if purge_response.status_code in [200, 204]:
                 print(f"[INFO] Existing {entity} data purged successfully.")
             else:
-                stats.log_skip(0, {}, f"[WARN] Purge failed: {purge_response.status_code} - {purge_response.text}")
+                log_entry = {
+                    "row": 0,
+                    "name": "",
+                    "parentId": "",
+                    "description": "",
+                    "response_id": "",
+                    "reason": f"Purge failed: {purge_response.text}",
+                    "status": str(purge_response.status_code)
+                }
+                stats.log_skip(0, log_entry, log_entry["reason"])
         except Exception as e:
-            stats.log_skip(0, {}, f"[ERROR] Exception during purge: {str(e)}")
+            log_entry = {
+                "row": 0,
+                "name": "",
+                "parentId": "",
+                "description": "",
+                "response_id": "",
+                "reason": str(e),
+                "status": "Exception"
+            }
+            stats.log_skip(0, log_entry, log_entry["reason"])
 
     # === Required Fields Per Entity ===
     nullable_fields = {
@@ -99,7 +105,16 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                 missing.append(f)
 
         if missing:
-            stats.log_skip(i, record, f"Missing required fields {missing}")
+            log_entry = {
+                "row": i,
+                "name": record.get("name", ""),
+                "parentId": record.get("parentId", ""),
+                "description": record.get("description", ""),
+                "response_id": "",
+                "reason": "",
+                "status": ""
+            }
+            stats.log_skip(i, log_entry, f"Missing required fields: {missing}")
             continue
 
         # === Ensure ID is an integer — only for update/upsert ===
@@ -107,7 +122,16 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             try:
                 record["id"] = int(record["id"])
             except (ValueError, TypeError):
-                stats.log_skip(i, record, "Invalid 'id' format — must be integer")
+                log_entry = {
+                    "row": i,
+                    "name": record.get("name", ""),
+                    "parentId": record.get("parentId", ""),
+                    "description": record.get("description", ""),
+                    "response_id": "",
+                    "reason": "",
+                    "status": ""
+                }
+                stats.log_skip(i, log_entry, "Invalid 'id' format — must be integer")
                 continue
 
         try:
@@ -123,7 +147,16 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             elif migration_type == "update":
                 record_id = record.get("id")
                 if not record_id:
-                    stats.log_skip(i, record, "Missing 'id' for update")
+                    log_entry = {
+                        "row": i,
+                        "name": record.get("name", ""),
+                        "parentId": record.get("parentId", ""),
+                        "description": record.get("description", ""),
+                        "response_id": "",
+                        "reason": "",
+                        "status": ""
+                    }
+                    stats.log_skip(i, log_entry, "Missing 'id' for update")
                     continue
                 patch_url = f"{api_url}/{record_id}"
                 print(f"📤 Row {i} → {patch_url}")
@@ -133,7 +166,16 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             elif migration_type == "upsert":
                 record_id = record.get("id")
                 if not record_id:
-                    stats.log_skip(i, record, "Missing 'id' for upsert")
+                    log_entry = {
+                        "row": i,
+                        "name": record.get("name", ""),
+                        "parentId": record.get("parentId", ""),
+                        "description": record.get("description", ""),
+                        "response_id": "",
+                        "reason": "",
+                        "status": ""
+                    }
+                    stats.log_skip(i, log_entry, "Missing 'id' for upsert")
                     continue
                 patch_url = f"{api_url}/{record_id}"
                 check = requests.get(patch_url, headers=headers)
@@ -147,36 +189,94 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                     response = requests.patch(patch_url, json=payload, headers=headers)
 
             else:
-                stats.log_skip(i, record, f"Unknown migration type '{migration_type}'")
+                log_entry = {
+                    "row": i,
+                    "name": record.get("name", ""),
+                    "parentId": record.get("parentId", ""),
+                    "description": record.get("description", ""),
+                    "response_id": "",
+                    "reason": f"Unknown migration type '{migration_type}'",
+                    "status": ""
+                }
+                stats.log_skip(i, log_entry, log_entry["reason"])
                 continue
 
-    
             # === Handle Response ===
             if response and response.status_code in [200, 201, 204]:
                 print(f"📬 Response status: {response.status_code}")
                 print(f"📬 Response body: {response.text[:500]}")
                 try:
                     response_data = response.json()
-                    error_reason = None
-
-                    # ✅ Check for embedded errors
                     if "Errors" in response_data:
                         error_reason = response_data["Errors"][0]["Outcome"]["InvalidOperationValidationError"]["Reason"]
-                        stats.log_skip(i, record, error_reason)
+                        log_entry = {
+                            "row": i,
+                            "name": record.get("name", ""),
+                            "parentId": record.get("parentId", ""),
+                            "description": record.get("description", ""),
+                            "response_id": "",
+                            "reason": error_reason,
+                            "status": ""
+                        }
+                        stats.log_skip(i, log_entry, error_reason)
                     elif "error" in response_data or "errors" in response_data:
                         error_reason = json.dumps(response_data, indent=2)
-                        stats.log_skip(i, record, f"API responded with error: {error_reason}")
+                        log_entry = {
+                            "row": i,
+                            "name": record.get("name", ""),
+                            "parentId": record.get("parentId", ""),
+                            "description": record.get("description", ""),
+                            "response_id": "",
+                            "reason": error_reason,
+                            "status": ""
+                        }
+                        stats.log_skip(i, log_entry, error_reason)
                     else:
-                        record["id"] = response_data.get("id", "")
-                        stats.log_success(i, record)
+                        log_entry = {
+                            "row": i,
+                            "status": "Migrated",
+                            "name": record.get("name", ""),
+                            "parentId": record.get("parentId", ""),
+                            "description": record.get("description", ""),
+                            "response_id": response_data.get("id", ""),
+                            "reason": ""
+                        }
+                        stats.log_success(i, log_entry)
                 except Exception as e:
                     print(f"⚠️ Failed to parse JSON: {str(e)}")
-                    stats.log_success(i, record)
+                    log_entry = {
+                        "row": i,
+                        "status": "Migrated",
+                        "name": record.get("name", ""),
+                        "parentId": record.get("parentId", ""),
+                        "description": record.get("description", ""),
+                        "response_id": "",
+                        "reason": ""
+                    }
+                    stats.log_success(i, log_entry)
             else:
-                reason = f"API responded with status {response.status_code} - {response.text[:500]}"
-                stats.log_skip(i, record, reason)
+                log_entry = {
+                    "row": i,
+                    "name": record.get("name", ""),
+                    "parentId": record.get("parentId", ""),
+                    "description": record.get("description", ""),
+                    "response_id": "",
+                    "reason": response.text[:500],
+                    "status": str(response.status_code)
+                }
+                stats.log_skip(i, log_entry, log_entry["reason"])
 
         except Exception as e:
             print(f"⚠️ Exception during migration: {str(e)}")
-            stats.log_skip(i, record, f"Exception: {str(e)}")
+            log_entry = {
+                "row": i,
+                "name": record.get("name", ""),
+                "parentId": record.get("parentId", ""),
+                "description": record.get("description", ""),
+                "response_id": "",
+                "reason": str(e),
+                "status": "Exception"
+            }
+            stats.log_skip(i, log_entry, log_entry["reason"])
+
     return stats.summary(), stats
