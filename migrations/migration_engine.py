@@ -49,6 +49,12 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
     }
     print("📡 Posting to:", api_url)
 
+    # === API does not accept null values in description field. Change them to "" ===
+    for record in records:
+        for field in ["description", "parentId"]:
+            if record.get(field) is None:
+                record[field] = ""
+
     # === Optional Purge Step ===
     if purge_existing:
         try:
@@ -280,3 +286,4 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             stats.log_skip(i, log_entry, log_entry["reason"])
 
     return stats.summary(), stats
+
