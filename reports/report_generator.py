@@ -47,6 +47,7 @@ def generate_report_files(summary, adapter_name, entity, migration_type):
     }
 
 def generate_xlsx_report(summary, filepath):
+    
     wb = Workbook()
     ws = wb.active
     ws.title = "Migration Records"
