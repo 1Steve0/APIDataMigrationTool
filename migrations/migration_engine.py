@@ -1,8 +1,6 @@
-#migration_engine.py
 import requests, json
 import time
 import csv
-
 
 class MigrationStats:
     def __init__(self):
@@ -10,7 +8,7 @@ class MigrationStats:
         self.success = 0
         self.skipped = 0
         self.errors = []
-        self.rows = [] 
+        self.rows = []
         self.start_time = time.time()
 
     def log_success(self, row_index, log_entry):
@@ -31,8 +29,9 @@ class MigrationStats:
             "skipped": self.skipped,
             "errors": self.errors,
             "duration": round(time.time() - self.start_time, 2),
-            "rows": self.rows 
+            "rows": self.rows
         }
+
     def write_csv(self, path):
         fieldnames = ["row", "status", "name", "id", "message", "parentId", "description", "response_id", "error"]
         with open(path, "w", newline="", encoding="utf-8") as f:
@@ -58,8 +57,10 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         "event": ["name", "startDate"],
         "property": ["name"],
         "action": ["name"],
+        "team": ["name"],
         "documents": ["name"],
         "project": ["name"],
+        "users": ["firstName", "email"],
         "organisation": ["name"],
         "xStakeholder Classifications": [
             "name", "parentId", "dataVersion", "description", "deleted", "classificationType"
@@ -72,17 +73,14 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         stats.total += 1
 
         # === Determine payload format ===
-        # The API for CM "Classification" uses "values"
-        # The API for CM "Project" uses "Values"
-        if "values" in record:
-            payload = record
-            values = record["values"]
-        elif "Values" in record:
-            payload = record
-            values = record["Values"]
-        else:
-            payload = {"values": record}
-            values = record
+        payload = record
+        values = record.get("Values") or record.get("values") or record
+
+        # === Logging helpers ===
+        def get_log_field(field):
+            if entity == "users":
+                return values.get(field, "")
+            return record.get(field, "") or values.get(field, "")
 
         # === Normalize nulls ===
         for field in ["description", "parentId"]:
@@ -97,9 +95,9 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         if missing:
             log_entry = {
                 "row": i,
-                "name": values.get("name", ""),
-                "parentId": values.get("parentId", ""),
-                "description": values.get("description", ""),
+                "name": get_log_field("name") or get_log_field("firstName"),
+                "parentId": get_log_field("parentId"),
+                "description": get_log_field("description"),
                 "response_id": "",
                 "reason": f"Missing required fields: {missing}",
                 "status": "Skipped"
@@ -122,9 +120,9 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                         reason = response_data["Errors"][0]["Outcome"]["InvalidOperationValidationError"]["Reason"]
                         stats.log_skip(i, {
                             "row": i,
-                            "name": values.get("name", ""),
-                            "parentId": values.get("parentId", ""),
-                            "description": values.get("description", ""),
+                            "name": get_log_field("name") or get_log_field("firstName"),
+                            "parentId": get_log_field("parentId"),
+                            "description": get_log_field("description"),
                             "response_id": "",
                             "reason": reason,
                             "status": "Skipped"
@@ -133,9 +131,9 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                         reason = json.dumps(response_data, indent=2)
                         stats.log_skip(i, {
                             "row": i,
-                            "name": values.get("name", ""),
-                            "parentId": values.get("parentId", ""),
-                            "description": values.get("description", ""),
+                            "name": get_log_field("name") or get_log_field("firstName"),
+                            "parentId": get_log_field("parentId"),
+                            "description": get_log_field("description"),
                             "response_id": "",
                             "reason": reason,
                             "status": "Skipped"
@@ -143,9 +141,9 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                     else:
                         stats.log_success(i, {
                             "row": i,
-                            "name": values.get("name", ""),
-                            "parentId": values.get("parentId", ""),
-                            "description": values.get("description", ""),
+                            "name": get_log_field("name") or get_log_field("firstName"),
+                            "parentId": get_log_field("parentId"),
+                            "description": get_log_field("description"),
                             "response_id": response_data.get("id", ""),
                             "reason": "",
                             "status": "Success"
@@ -154,19 +152,25 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
                     print(f"⚠️ Failed to parse JSON: {str(e)}")
                     stats.log_success(i, {
                         "row": i,
-                        "name": values.get("name", ""),
-                        "parentId": values.get("parentId", ""),
-                        "description": values.get("description", ""),
+                        "name": get_log_field("name") or get_log_field("firstName"),
+                        "parentId": get_log_field("parentId"),
+                        "description": get_log_field("description"),
                         "response_id": "",
                         "reason": "",
                         "status": "Success"
                     })
             else:
+                if response.status_code == 400:
+                    print("❌ Full API response:")
+                    print(response.text)
+                    print("📦 Raw response content type:", response.headers.get("Content-Type"))
+                    print("📦 Raw response length:", len(response.content)) 
+                    print("📦 Raw response bytes:", response.content[:500])
                 stats.log_skip(i, {
                     "row": i,
-                    "name": values.get("name", ""),
-                    "parentId": values.get("parentId", ""),
-                    "description": values.get("description", ""),
+                    "name": get_log_field("name") or get_log_field("firstName"),
+                    "parentId": get_log_field("parentId"),
+                    "description": get_log_field("description"),
                     "response_id": "",
                     "reason": f"HTTP {response.status_code}: {response.text[:200]}",
                     "status": "Skipped"
@@ -175,13 +179,12 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
             print(f"⚠️ Exception during migration: {str(e)}")
             stats.log_skip(i, {
                 "row": i,
-                "name": values.get("name", ""),
-                "parentId": values.get("parentId", ""),
-                "description": values.get("description", ""),
+                "name": get_log_field("name") or get_log_field("firstName"),
+                "parentId": get_log_field("parentId"),
+                "description": get_log_field("description"),
                 "response_id": "",
                 "reason": str(e),
                 "status": "Exception"
             }, str(e))
 
     return stats.summary(), stats
-

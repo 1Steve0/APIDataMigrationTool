@@ -38,8 +38,8 @@ $headerMap = [
     "Country" => ["address", "country"],
     "Location" => ["address", "location"],
     "Auto Geocode" => ["address", "autoGeocode"],
-    "Legacy ID" => "legacyidprojects",
-    "Project Email" => "projectemailaddress"
+    "Source Id (Admin Only)" => "projectsourceid"
+    // "Project Email" => "projectemailaddress"
 ];
 
 // === Normalize Header ===
@@ -98,6 +98,7 @@ foreach ($lines as $line) {
         "dateStart"              => $timestamp,
         "name"                   => normalizeEmpty($row["name"]),
         "notes"                  => normalizeEmpty($row["notes"] ?? ""),
+        "projectsourceid"               => normalizeEmpty($row["projectsourceid"] ?? ""),
         "projectGroup" => [
             "assign" => $groupValues,
             "unassign" => []
