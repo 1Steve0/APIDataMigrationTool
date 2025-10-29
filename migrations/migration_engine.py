@@ -41,8 +41,9 @@ class MigrationStats:
                 normalized = {key: row.get(key, "") for key in fieldnames}
                 writer.writerow(normalized)
 
-def migrate_records(records, migration_type, api_url, auth_token, entity, purge_existing=False):
-
+def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_existing=False):
+    records = payload.get("records", [])
+    value_key = payload.get("valueKey", "values")
     stats = MigrationStats()
     headers = {
         "Authorization": f"Bearer {auth_token}",
@@ -73,8 +74,9 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         stats.total += 1
 
         # === Determine payload format ===
-        payload = record
-        values = record.get("Values") or record.get("values") or record
+        values = record.get(value_key)
+        if not isinstance(values, dict):
+            values = record
 
         # === Logging helpers ===
         def get_log_field(field):
@@ -86,11 +88,12 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         for field in ["description", "parentId"]:
             if field in values and values[field] is None:
                 values[field] = ""
-
+        # print(f"🔍 Row {i} values keys: {list(values.keys())}")
+        # print(f"🔍 Row {i} name value: {values.get('name')}")
         # === Required field check ===
         missing = [
             f for f in required_fields
-            if f not in values or (values[f] is None and f not in nullable_fields)
+            if f not in values or values[f] in [None, ""]
         ]
         if missing:
             log_entry = {
@@ -109,7 +112,7 @@ def migrate_records(records, migration_type, api_url, auth_token, entity, purge_
         try:
             print(f"📤 Row {i} → {api_url}")
             print(json.dumps(payload, indent=2))
-            response = requests.post(api_url, json=payload, headers=headers)
+            response = requests.post(api_url, json=record, headers=headers)
 
             if response.status_code in [200, 201, 204]:
                 print(f"📬 Response status: {response.status_code}")

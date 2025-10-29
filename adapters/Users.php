@@ -149,10 +149,12 @@ foreach ($lines as $line) {
 }
 // === Emit Output ===
 $output = [
-    "recordCount" => count($records),
-    "generatedAt" => date("c"),
-    "records" => $records
+  "recordCount" => count($records),
+  "generatedAt" => date("c"),
+  "valueKey" => "values",  // "Values" or "values" depending on your adapter
+  "records" => $records
 ];
+
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
 $json = json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {

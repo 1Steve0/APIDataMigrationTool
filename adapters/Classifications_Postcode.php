@@ -72,9 +72,9 @@ foreach ($lines as $line) {
 
 // === Emit Output ===
 $output = [
-    "recordCount" => count($records),
-    "generatedAt" => date("c"),
-    "records" => $records
+  "recordCount" => count($records),
+  "generatedAt" => date("c"),
+  "records" => $records
 ];
 
 echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

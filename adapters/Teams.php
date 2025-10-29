@@ -114,9 +114,10 @@ foreach ($lines as $line) {
 
 // === Emit Output ===
 $output = [
-    "recordCount" => count($records),
-    "generatedAt" => date("c"),
-    "records" => $records
+  "recordCount" => count($records),
+  "generatedAt" => date("c"),
+  "valueKey" => "Values",  // "Values" or "values" depending on your adapter
+  "records" => $records
 ];
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
 

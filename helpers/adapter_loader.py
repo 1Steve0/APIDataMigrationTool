@@ -20,6 +20,8 @@ def run_php_adapter(adapter_path, input_file):
             encoding="utf-8",
             check=True
         )
+        print("🔧 STDERR from adapter:")
+        print(result.stderr)
         output = result.stdout.strip().lstrip('\ufeff')
         try:
             return json.loads(output)
@@ -47,11 +49,12 @@ def validate_adapter_output(parsed_output):
         raise ValueError("Adapter output missing 'records' list")
 
     records = parsed_output["records"]
+    if not isinstance(records, list):
+        raise ValueError("'records' must be a list")
 
-    # # 🔍 Log each record's keys and values for validation clarity
-    # for i, record in enumerate(records, start=1):
-    #     print(f"\n🔍 Record {i} keys: {list(record.keys())}")
-    #     for key in record:
-    #         print(f"    {key}: {record[key]} (type: {type(record[key])})")
+    for i, record in enumerate(records, start=1):
+        values = record.get("Values") or record.get("values")
+        if not isinstance(values, dict):
+            raise ValueError(f"Record {i} missing valid 'Values' or 'values' dictionary")
 
     return records
