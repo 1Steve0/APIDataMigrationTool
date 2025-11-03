@@ -14,7 +14,6 @@ if (!is_readable($inputPath)) {
 $lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 // Print debug to stderr
 fwrite(STDERR, "📦 Php file read:\n");
-print_r($lines, true);
 
 if (count($lines) < 2) {
     echo json_encode(["error" => "CSV file is empty or malformed"]);
@@ -55,6 +54,8 @@ foreach ($lines as $line) {
         fwrite(STDERR, "⚠️ Skipping row with empty name: " . json_encode($row) . "\n");
         continue;
     }
+    // remove the characters not allowed in this cell ie.  /,:; 
+    $row["name"] = preg_replace('/[\/:;]/', '', $row["name"]);
 
     // Normalize classificationType
     $classificationType = (strtoupper($row["header"]) === "TRUE") ? 1 : 2;
@@ -69,12 +70,17 @@ foreach ($lines as $line) {
         "parentId" => (int) $row["parent_id"]
     ];
 }
-
+if (empty($records)) {
+    fwrite(STDERR, "❌ No valid records generated\n");
+    echo json_encode(["error" => "No valid records generated"]);
+    exit(1);
+}
 // === Emit Output ===
 $output = [
-  "recordCount" => count($records),
-  "generatedAt" => date("c"),
-  "records" => $records
+    "recordCount" => count($records),
+    "generatedAt" => date("c"),
+    "valueKey" => "values",
+    "records" => array_map(fn($r) => ["values" => $r], $records)
 ];
 
 echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

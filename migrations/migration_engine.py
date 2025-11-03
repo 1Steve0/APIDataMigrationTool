@@ -64,7 +64,7 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
         "users": ["firstName", "email"],
         "organisation": ["name"],
         "xStakeholder Classifications": [
-            "name", "parentId", "dataVersion", "description", "deleted", "classificationType"
+            "name", "parentId", "dataVersion", "deleted", "classificationType"
         ]
     }
     required_fields = REQUIRED_FIELDS.get(entity, [])
@@ -111,7 +111,8 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
         # === POST to API ===
         try:
             print(f"📤 Row {i} → {api_url}")
-            print(json.dumps(payload, indent=2))
+            value_key = payload.get("valueKey", "values")
+            print(json.dumps(record, indent=2))
             response = requests.post(api_url, json=record, headers=headers)
 
             if response.status_code in [200, 201, 204]:

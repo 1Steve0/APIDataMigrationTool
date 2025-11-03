@@ -102,7 +102,7 @@ foreach ($lines as $line) {
         "DataVersion" => 1,
         "ProjectOperations" => [
             "Relate" => $relateIds,
-            "Unrelate" => [0]
+            "Unrelate" => []
         ],
         "Values" => [
             "description" => normalizeEmpty($row["description"] ?? ""),
