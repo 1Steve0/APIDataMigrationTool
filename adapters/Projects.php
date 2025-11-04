@@ -28,7 +28,7 @@ if (count($lines) < 2) {
 }
 
 // === Load Lookup Map ===
-$lookup_path = "C:/Users/steve/OneDrive/Documents/Social Pinpoint/Project/SWC/CM_SWC_Projects/LookupGroupIdForProjects.csv";
+$lookup_path = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Project.csv";
 $lookup_map = [];
 
 if (($handle = fopen($lookup_path, "r")) !== false) {

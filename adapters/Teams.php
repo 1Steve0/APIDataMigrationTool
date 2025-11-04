@@ -1,11 +1,16 @@
 <?php
-error_reporting(E_ALL & ~E_DEPRECATED);
-ini_set('display_errors', 1);
-fwrite(STDERR, "🛠 Adapter started\n");
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', 'php://stderr');
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
 
-// === Helpers ===
+$mode = strtolower($argv[2] ?? 'insert'); // default to insert
+
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
+}
+function hasColumn($key, $normalizedHeader) {
+    return in_array($key, $normalizedHeader);
 }
 
 // === Input Path ===
@@ -15,8 +20,36 @@ if (!is_readable($inputPath)) {
     exit(1);
 }
 
-// === Load Project Ids for Teams assignment to projects ===
-$projectIdPath = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM_SWC_Projects\\LookupProjectIdForTeams.csv";
+// === Load CSV ===
+$lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+if (count($lines) < 2) {
+    echo json_encode(["error" => "CSV file is empty or malformed"]);
+    exit(1);
+}
+
+// === Load Team Lookup ===
+$lookup_path = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Teams.csv";
+$lookup_map = [];
+
+if (($handle = fopen($lookup_path, "r")) !== false) {
+    $header = fgetcsv($handle);
+    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+    while (($data = fgetcsv($handle)) !== false) {
+        $row = array_combine($header, $data);
+        $team_name = trim($row["Name"]);
+        $team_id = trim($row["Id"]);
+        if ($team_name !== "") {
+            if (isset($lookup_map[$team_name])) {
+                fwrite(STDERR, "⚠️ Duplicate team name in lookup: '{$team_name}'\n");
+            }
+            $lookup_map[$team_name] = $team_id;
+        }
+    }
+    fclose($handle);
+}
+
+// === Load Project IDs for Team assignment ===
+$projectIdPath = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Project.csv";
 $projectIds = [];
 
 if (is_readable($projectIdPath)) {
@@ -33,99 +66,127 @@ if (is_readable($projectIdPath)) {
     fwrite(STDERR, "⚠️ Warning: Project ID lookup file not found\n");
 }
 
-// === Load CSV ===
-$lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-fwrite(STDERR, "📦 Php file read:\n");
-fwrite(STDERR, print_r($lines, true));
-
-if (count($lines) < 2) {
-    echo json_encode(["error" => "CSV file is empty or malformed"]);
-    exit(1);
-}
-
 // === Header Mapping ===
 $headerMap = [
-    "Source Id (Admin Only)" => "teamssourceid",
+    "Id" => "id",
     "Name" => "name",
     "Description" => "description",
-    "Projects" => "projects"
+    "Projects" => "projects",
+    "Source Id (Admin Only)" => "teamssourceid"
 ];
 
 // === Normalize Header ===
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
-$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]); // Strip BOM
+$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]);
 
 $normalizedHeader = array_map(function ($col) use ($headerMap) {
     return $headerMap[$col] ?? $col;
 }, $rawHeader);
 
 // === Validate Columns ===
-fwrite(STDERR, "🧾 Raw header: " . implode(", ", $rawHeader) . "\n");
 $expected = array_values($headerMap);
 $missing = array_diff($expected, $normalizedHeader);
 if ($missing) {
     fwrite(STDERR, "⚠️ Warning: Missing expected columns: " . implode(", ", $missing) . "\n");
 }
 
-// === Build Records in Target Format ===
+// === Build Records ===
 $records = [];
-$skipped = 0;
+$timestamp = date("Y-m-d\TH:i:s");
 
-foreach ($lines as $line) {
-    $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
-    if (count($fields) !== count($normalizedHeader)) {
-        fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
-        $skipped++;
-        continue;
-    }
-
-    $row = array_combine($normalizedHeader, $fields);
-    fwrite(STDERR, "🔍 Row: " . json_encode($row) . "\n");
-
-    if (!$row || empty(trim($row["name"] ?? ""))) {
-        fwrite(STDERR, "⚠️ Skipping row missing mandatory field 'name': " . json_encode($row) . "\n");
-        $skipped++;
-        continue;
-    }
-
-    // === Resolve project IDs ===
-    $relateIds = [];
-    $projectNames = explode(",", $row["projects"] ?? "");
-    foreach ($projectNames as $projName) {
-        $projName = trim($projName);
-        if (isset($projectIds[$projName])) {
-            $relateIds[] = $projectIds[$projName];
+try {
+    foreach ($lines as $line) {
+        $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
+        if (count($fields) !== count($normalizedHeader)) {
+            fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
+            continue;
         }
-    }
 
-    $records[] = [
-        "DataVersion" => 1,
-        "ProjectOperations" => [
-            "Relate" => $relateIds,
-            "Unrelate" => []
-        ],
-        "Values" => [
-            "description" => normalizeEmpty($row["description"] ?? ""),
-            "name" => normalizeEmpty($row["name"] ?? "")
-            // "teamssourceid" => normalizeEmpty($row["teamssourceid"] ?? "")
-        ]
-    ];
+        $row = array_combine($normalizedHeader, $fields);
+        if (!$row || !isset($row["name"])) {
+            fwrite(STDERR, "⚠️ Skipping invalid row: " . json_encode($row) . "\n");
+            continue;
+        }
+
+        // === Update mode: require ID ===
+        $id = $mode === 'update' ? normalizeEmpty($row["id"] ?? "") : null;
+        if ($mode === 'update' && !$id) {
+            fwrite(STDERR, "⚠️ Skipping update row with missing ID\n");
+            continue;
+        }
+
+        // === Resolve project IDs ===
+        $relateIds = [];
+        if (!empty($row["projects"])) {
+            $projectNames = array_map('trim', explode(',', $row["projects"]));
+            foreach ($projectNames as $projName) {
+                if (isset($projectIds[$projName])) {
+                    $relateIds[] = $projectIds[$projName];
+                } else {
+                    fwrite(STDERR, "⚠️ Unknown project name: '{$projName}'\n");
+                }
+            }
+        }
+
+        // === Build Payload ===
+        $values = [];
+
+        if (hasColumn("name", $normalizedHeader)) {
+            $values["name"] = normalizeEmpty($row["name"] ?? "");
+        }
+        if (hasColumn("description", $normalizedHeader)) {
+            $values["description"] = normalizeEmpty($row["description"] ?? "");
+        }
+        if (hasColumn("teamssourceid", $normalizedHeader)) {
+            $values["teamssourceid"] = normalizeEmpty($row["teamssourceid"] ?? "");
+        }
+        if (hasColumn("teamssourceid", $normalizedHeader)) {
+            $values["teamssourceid"] = normalizeEmpty($row["teamssourceid"] ?? "");
+        }
+
+        // Always include timestamps
+        // $values["dateStart"] = $timestamp;
+        // $values["dateEnd"] = $timestamp;
+
+        $record = [
+            "DataVersion" => 1,
+            "ProjectOperations" => [
+                "Relate" => $relateIds,
+                "Unrelate" => []
+            ],
+            "Values" => $values
+        ];
+        if ($mode === 'update') {
+            $record["id"] = $id;
+        }
+
+        $records[] = $record;
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, "❌ Fatal error: " . $e->getMessage() . "\n");
+    echo json_encode(["error" => "Adapter execution failed", "details" => $e->getMessage()]);
+    exit(1);
 }
 
 // === Emit Output ===
 $output = [
-  "recordCount" => count($records),
-  "generatedAt" => date("c"),
-  "valueKey" => "Values",  // "Values" or "values" depending on your adapter
-  "records" => $records
+    "recordCount" => count($records),
+    "generatedAt" => date("c"),
+    "valueKey" => "Values",
+    "records" => $records
 ];
-fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
 
 $json = json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {
-    fwrite(STDERR, "❌ JSON encoding failed: " . json_last_error_msg() . "\n");
+    $error = json_last_error_msg();
+    fwrite(STDERR, "❌ JSON encoding failed: $error\n");
+    echo json_encode(["error" => "JSON encoding failed", "details" => $error]);
     exit(1);
 }
 
+if (!is_array($records) || empty($records)) {
+    fwrite(STDERR, "❌ No valid records generated\n");
+}
+
+file_put_contents("payload.json", $json);
 echo $json . "\n";
-fwrite(STDERR, "✅ Adapter completed with {$output['recordCount']} records\n");
