@@ -1,18 +1,18 @@
 <?php
-ini_set('display_errors', 1);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', 'php://stderr');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
 
-// === Helpers ===
+$mode = strtolower($argv[2] ?? 'insert'); // default to insert
+
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
 }
-function normalizeLabel($label) {
-    return strtolower(trim(preg_replace('/\s+/', ' ', $label)));
-}
 
+function hasColumn($key, $normalizedHeader) {
+    return in_array($key, $normalizedHeader);
+}
 // === Input Path ===
 $inputPath = trim($argv[1] ?? '', " \t\n\r\0\x0B\"'");
 if (!is_readable($inputPath)) {
@@ -22,7 +22,6 @@ if (!is_readable($inputPath)) {
 
 // === Load CSV ===
 $lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
 if (count($lines) < 2) {
     echo json_encode(["error" => "CSV file is empty or malformed"]);
     exit(1);
@@ -33,8 +32,8 @@ $lookup_path = "C:/Users/steve/OneDrive/Documents/Social Pinpoint/Project/SWC/CM
 $lookup_map = [];
 
 if (($handle = fopen($lookup_path, "r")) !== false) {
-    $header = fgetcsv($handle); // Read header row
-    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]); //BOM header inserts \ufeff in CSV to first column name, remove it
+    $header = fgetcsv($handle);
+    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
     while (($data = fgetcsv($handle)) !== false) {
         $row = array_combine($header, $data);
         $group_name = trim($row["Import Path"]);
@@ -51,6 +50,7 @@ if (($handle = fopen($lookup_path, "r")) !== false) {
 
 // === Header Mapping ===
 $headerMap = [
+    "Id" => "id",
     "Name" => "name",
     "TimeZone" => "timeZone",
     "Group" => "projectGroup",
@@ -67,7 +67,7 @@ $headerMap = [
 
 // === Normalize Header ===
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
-$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]); // Strip BOM
+$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]);
 
 $normalizedHeader = array_map(function ($col) use ($headerMap) {
     $mapped = $headerMap[$col] ?? $col;
@@ -89,17 +89,25 @@ $timestamp = date("Y-m-d\TH:i:s");
 
 try {
     foreach ($lines as $line) {
-        $rowIndex = count($records) + 1;
         $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
         if (count($fields) !== count($normalizedHeader)) {
             fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
             continue;
         }
+
         $row = array_combine($normalizedHeader, $fields);
-        if (!$row || !isset($row["name"]) || trim($row["name"]) === "") {
+        if (!$row || !isset($row["name"])) {
             fwrite(STDERR, "⚠️ Skipping invalid row: " . json_encode($row) . "\n");
             continue;
         }
+
+        // === Update mode: require ID ===
+        $id = $mode === 'update' ? normalizeEmpty($row["id"] ?? "") : null;
+        if ($mode === 'update' && !$id) {
+            fwrite(STDERR, "⚠️ Skipping update row with missing ID\n");
+            continue;
+        }
+
         // === Group Lookup ===
         $projectGroupIntegers = [];
         if (!empty($row["projectGroup"])) {
@@ -126,30 +134,61 @@ try {
         }
 
         // === Build Payload ===
-        $values = [
-            "address.address"     => normalizeEmpty($row["address.address"] ?? ""),
-            "address.suburb"      => normalizeEmpty($row["address.suburb"] ?? ""),
-            "address.state"       => normalizeEmpty($row["address.state"] ?? ""),
-            "address.postCode"    => normalizeEmpty($row["address.postCode"] ?? ""),
-            "address.country"     => normalizeEmpty($row["address.country"] ?? ""),
-            "address.location"    => normalizeEmpty($address_location),
-            "address.autoGeocode" => filter_var($row["address.autoGeocode"] ?? false, FILTER_VALIDATE_BOOLEAN),
-            "dateEnd"             => $timestamp,
-            "dateStart"           => $timestamp,
-            "name"                => normalizeEmpty($row["name"]),
-            "notes"               => normalizeEmpty($row["notes"] ?? ""),
-            "projectsourceid"     => normalizeEmpty($row["projectsourceid"] ?? ""),
-            "projectGroup"        => [
+        $values = [];
+
+        if (hasColumn("name", $normalizedHeader)) {
+            $values["name"] = normalizeEmpty($row["name"] ?? "");
+        }
+        if (hasColumn("notes", $normalizedHeader)) {
+            $values["notes"] = normalizeEmpty($row["notes"] ?? "");
+        }
+        if (hasColumn("projectsourceid", $normalizedHeader)) {
+            $values["projectsourceid"] = normalizeEmpty($row["projectsourceid"] ?? "");
+        }
+        if (hasColumn("timeZone", $normalizedHeader)) {
+            $values["timeZone"] = normalizeEmpty($row["timeZone"] ?? "");
+        }
+        if (hasColumn("projectGroup", $normalizedHeader)) {
+            $values["projectGroup"] = [
                 "assign" => $projectGroupIntegers,
                 "unassign" => []
-            ],
-            "timeZone"            => normalizeEmpty($row["timeZone"] ?? "")
-        ];
+            ];
+        }
 
-        $records[] = [
+        // === Address block ===
+        $address = [];
+        foreach (["address.address", "address.suburb", "address.state", "address.postCode", "address.country"] as $field) {
+            if (hasColumn($field, $normalizedHeader)) {
+                $address[explode(".", $field)[1]] = normalizeEmpty($row[$field] ?? "");
+            }
+        }
+        if (hasColumn("address.location", $normalizedHeader)) {
+            $address["location"] = $address_location;
+        }
+        if (hasColumn("address.autoGeocode", $normalizedHeader)) {
+            $address["autoGeocode"] = filter_var($row["address.autoGeocode"] ?? false, FILTER_VALIDATE_BOOLEAN);
+        }
+        if (!empty($address)) {
+            $values["address"] = $address;
+        }
+
+        // Always include timestamps
+        $values["dateStart"] = $timestamp;
+        $values["dateEnd"] = $timestamp;
+
+        $record = [
             "dataVersion" => 1,
+            "ProjectOperations" => [
+                "Relate" => [],
+                "Unrelate" => []
+            ],
             "Values" => $values
         ];
+        if ($mode === 'update') {
+            $record["id"] = $id;
+        }
+
+        $records[] = $record;
     }
 } catch (Throwable $e) {
     fwrite(STDERR, "❌ Fatal error: " . $e->getMessage() . "\n");
@@ -172,10 +211,12 @@ if ($json === false) {
     echo json_encode(["error" => "JSON encoding failed", "details" => $error]);
     exit(1);
 }
+
 if (!is_array($records) || empty($records)) {
     fwrite(STDERR, "❌ No valid records generated\n");
 }
 
 file_put_contents("payload.json", $json);
 echo $json . "\n";
-fwrite(STDERR, "✅ Adapter completed with {$output['recordCount']} records\n");
+fwrite(STDERR, "📁 Wrote insert rows to: " . realpath($insertPath) . "\n");
+fwrite(STDERR, "📁 Wrote update rows to: " . realpath($updatePath) . "\n");

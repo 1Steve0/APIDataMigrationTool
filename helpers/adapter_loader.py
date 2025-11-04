@@ -3,7 +3,7 @@ import subprocess
 import json
 import os
 
-def run_php_adapter(adapter_path, input_file):
+def run_php_adapter(adapter_path, input_file, migration_type):
     """
     Executes a PHP adapter script and returns parsed JSON output.
     """
@@ -14,7 +14,7 @@ def run_php_adapter(adapter_path, input_file):
 
     try:
         result = subprocess.run(
-            ['php', adapter_path, input_file],
+            ['php', adapter_path, input_file, migration_type],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -39,7 +39,7 @@ def run_php_adapter(adapter_path, input_file):
             "details": str(e),
             "stdout": e.stdout,
             "stderr": e.stderr
-        }
+        }  
     
 def validate_adapter_output(parsed_output):
     if not isinstance(parsed_output, dict):
