@@ -72,10 +72,6 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
     required_fields = REQUIRED_FIELDS.get(entity, [])
 
     for i, record in enumerate(records, start=1):
-        project_ops = record.get(project_ops_key)
-        if not isinstance(project_ops, dict):
-            print(f"⚠️ Using default empty projectOperations for row {i}")
-            project_ops = {"relate": [], "unrelate": []}
 
         stats.total += 1
         values = record.get(value_key) if isinstance(record.get(value_key), dict) else record
@@ -88,6 +84,7 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                 values[field] = ""
 
         if migration_type != "update":
+
             missing = [f for f in required_fields if values.get(f) in [None, ""]]
             if missing:
                 stats.log_skip(i, {
@@ -102,6 +99,10 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                 continue
 
         if migration_type == "update":
+            project_ops = record.get(project_ops_key)
+            if not isinstance(project_ops, dict):
+                print(f"⚠️ Using default empty projectOperations for row {i}")
+                project_ops = {"relate": [], "unrelate": []}
             record_id = record.get("id") or record.get("Id") or values.get("id")
             if not record_id:
                 stats.log_skip(i, {
@@ -121,9 +122,9 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
 
             payload_body = {
                 data_version_key: record.get(data_version_key, 1),
-                project_ops_key: project_ops,
                 value_key: record.get(value_key, {})
             }
+            payload_body[project_ops_key] = project_ops
 
             if not isinstance(payload_body.get(value_key), dict):
                 stats.log_skip(i, {
@@ -157,17 +158,6 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                 print(f"⏳ Retry {attempt}/{MAX_RETRIES} on row {i} due to: {str(e)}")
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY)
-                else:
-                    stats.log_skip(i, {
-                        "row": i,
-                        "name": get_log_field("name") or get_log_field("firstName"),
-                        "parentId": get_log_field("parentId"),
-                        "description": get_log_field("description"),
-                        "response_id": "",
-                        "log_method": method,
-                        "log_endpoint": endpoint,
-                        "id": record_id if migration_type == "update" else record.get("id", "")
-                    }, f"Request failed after {MAX_RETRIES} attempts: {str(e)}")
 
         if not response:
             continue
@@ -176,17 +166,16 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
             try:
                 response_data = response.json()
                 if "Errors" in response_data:
-                    reason = response_data["Errors"][0]["Outcome"]["InvalidOperationValidationError"]["Reason"]
-                    stats.log_skip(i, {
-                        "row": i,
-                        "name": get_log_field("name") or get_log_field("firstName"),
-                        "parentId": get_log_field("parentId"),
-                        "description": get_log_field("description"),
-                        "response_id": "",
-                        "log_method": method,
-                        "log_endpoint": endpoint,
-                        "id": record_id if migration_type == "update" else record.get("id", "")
-                    }, reason)
+                    try:
+                        reason = (
+                            response_data["Errors"][0]
+                            .get("Outcome", {})
+                            .get("InvalidOperationValidationError", {})
+                            .get("Reason", "Unknown validation error")
+                        )
+                    except Exception as e:
+                        reason = f"Error parsing validation reason: {str(e)}"
+
                 elif "error" in response_data or "errors" in response_data:
                     reason = json.dumps(response_data, indent=2)
                     stats.log_skip(i, {
@@ -223,16 +212,8 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                     "id": record_id if migration_type == "update" else record.get("id", ""),
                     "reason": "Non-JSON response, assumed success"
                 })
-            else:
-                stats.log_skip(i, {
-                    "row": i,
-                    "name": get_log_field("name") or get_log_field("firstName"),
-                    "parentId": get_log_field("parentId"),
-                    "description": get_log_field("description"),
-                    "response_id": "",
-                    "log_method": method,
-                    "log_endpoint": endpoint,
-                    "id": record_id if migration_type == "update" else record.get("id", "")
-                }, f"HTTP {response.status_code}: {response.text[:200]}")
+                print(f"✅ Row {i} written successfully")
+        if not response_data.get("id"):
+            print(f"⚠️ No ID returned for row {i}, possible partial write")
 
     return stats.summary(), stats

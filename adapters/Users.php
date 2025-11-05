@@ -5,12 +5,29 @@ fwrite(STDERR, "🛠 Adapter started\n");
 
 $mode = strtolower($argv[2] ?? 'insert'); // 'insert' or 'update'
 
+// === Helpers ===
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
 }
 function normalizeEmail($email) {
     return strtolower(trim($email));
 }
+
+// === Editable whitelist (one-per-line for visibility) ===
+$allowed = [
+    'department',
+    'email',
+    'fax',
+    'firstName',
+    'lastName',
+    'mobile',
+    'notes',
+    'organisation',
+    'phone',
+    'position',
+    'useLegacyLogin',
+    'usersourceid'
+];
 
 // === Input Path ===
 $inputPath = trim($argv[1] ?? '', " \t\n\r\0\x0B\"'");
@@ -39,6 +56,7 @@ $headerMap = [
     "Fax" => "fax",
     "Email" => "email",
     "Login" => "login",
+    // uncomment if you include System Role column in CSV and want to map it
     "System Role" => "systemrole",
     "Id" => "id" // used only in update mode
 ];
@@ -52,61 +70,78 @@ $normalizedHeader = array_map(function ($col) use ($headerMap) {
 }, $rawHeader);
 
 fwrite(STDERR, "🧾 Raw header: " . implode(", ", $rawHeader) . "\n");
+fwrite(STDERR, "🔧 Mode: $mode\n");
 
+// === Build Records in Target Format ===
 $records = [];
-
-foreach ($lines as $line) {
+foreach ($lines as $lineNumber => $line) {
     $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
     if (count($fields) !== count($normalizedHeader)) {
-        fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
+        fwrite(STDERR, "⚠️ Skipping row with mismatched column count (row " . ($lineNumber+2) . ")\n");
         continue;
     }
 
     $row = array_combine($normalizedHeader, $fields);
 
-    // === Build Values block ===
+    // === Build normalized $values once from CSV ===
     $values = [];
-
     foreach ($normalizedHeader as $key) {
-        if ($key === "id") continue; // handled separately
-        if ($mode === 'insert' || array_key_exists($key, $row)) {
-            $values[$key] = normalizeEmpty($row[$key] ?? "");
+        if ($key === 'id') continue; // id is top-level for updates
+        $values[$key] = normalizeEmpty($row[$key] ?? '');
+    }
+
+    // Ensure defaults present
+    $values['useLegacyLogin'] = false;
+
+    // === Parse roles from normalized key and ensure safe fallback ===
+    $systemrole = array_filter(array_map('trim', explode(';', trim($row['systemrole'] ?? ''))));
+    $systemrole = array_values(array_filter($systemrole, 'strlen'));
+    if (empty($systemrole)) {
+        $systemrole = ['StandardUser'];
+    }
+
+    // === Build final values using explicit whitelist (preserves order and shape) ===
+    $finalValues = [];
+    foreach ($allowed as $k) {
+        if (array_key_exists($k, $values)) {
+            $finalValues[$k] = $values[$k];
+        } else {
+            $finalValues[$k] = ($k === 'useLegacyLogin') ? false : '';
         }
     }
 
-    // === Add static fields ===
-    $values["userStereotypes"] = [
-        "assign" => [],
-        "unassign" => []
-    ];
-    $values["userstatus"] = 0;
-    $values["useLegacyLogin"] = false;
-    $systemrole = array_filter(array_map('trim', explode(";", trim($row["systemvroles"] ?? ""))));
-        
-    // === Remove unneccessary fields ===
-    unset($values["OAuth Identifier"]);
-    unset($values["Descriptor"]);
-    unset($values["Visibility"]);
-    unset($values["Deleted"]);
-    unset($values["useLegacyLogin"]);
+    // optional: log dropped keys for visibility
+    $dropped = array_diff(array_keys($values), $allowed);
+    if (!empty($dropped)) {
+        fwrite(STDERR, "🧹 Dropped keys for row " . ($lineNumber+2) . ": " . implode(', ', $dropped) . "\n");
+    }
 
     // === Build record ===
     $record = [
-        "DataVersion" => 1,
-        "Values" => $values
+        'dataVersion' => 1,
+        'values' => $finalValues
     ];
 
-    if ($mode === 'update') {
-        $record["id"] = trim($row["id"] ?? "");
-        $record["ProjectOperations"] = [
-            "Relate" => $systemrole,
-            "Unrelate" => []
+    if ($mode === 'insert') {
+        $record['sendOnboardingEmail'] = false;
+        $record['stereotypeOperations'] = [
+            'Relate' => $systemrole,
+            'Unrelate' => []
+        ];
+    } else { // update
+        $id = normalizeEmpty($row['id'] ?? '');
+        if ($id === '') {
+            fwrite(STDERR, "⚠️ Skipping update row missing ID (row " . ($lineNumber+2) . ")\n");
+            continue;
+        }
+        $record['id'] = $id;
+        $record['projectOperations'] = [
+            'Relate' => $systemrole,
+            'Unrelate' => []
         ];
     }
-    if ($mode === 'insert') {
-        $record["SentOnboardingEmail"] = false;
-    }
 
+    fwrite(STDERR, "📤 Built record (row " . ($lineNumber+2) . "): " . json_encode($record, JSON_UNESCAPED_SLASHES) . "\n");
     $records[] = $record;
 }
 
@@ -114,18 +149,25 @@ foreach ($lines as $line) {
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "valueKey" => "Values",
-    "projectOperationsKey" => "ProjectOperations",
-    "dataVersionKey" => "DataVersion",
+    "valueKey" => "values",
+    "dataVersionKey" => "dataVersion",
     "records" => $records
 ];
 
+if ($mode === 'update') {
+    $output["projectOperationsKey"] = "ProjectOperations";
+}
+
+// sample debug of first record (if any) for runner visibility
+if (!empty($records)) {
+    fwrite(STDERR, "🔬 Sample record JSON: " . json_encode($records[0], JSON_UNESCAPED_SLASHES) . "\n");
+}
 
 $json = json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {
     fwrite(STDERR, "❌ JSON encoding failed: " . json_last_error_msg() . "\n");
     exit(1);
 }
+
 echo $json . "\n";
-fwrite(STDERR, "🔧 Mode: $mode\n");
 fwrite(STDERR, "📦 Processed " . count($records) . " records\n");

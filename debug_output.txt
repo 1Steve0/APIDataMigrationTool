@@ -1,0 +1,160 @@
+📄 Raw PHP Adapter Output:
+{
+  "recordCount": 3,
+  "generatedAt": "2025-11-05T08:33:38+00:00",
+  "valueKey": "values",
+  "dataVersionKey": "dataVersion",
+  "records": [
+    {
+      "dataVersion": 1,
+      "values": {
+        "department": "",
+        "email": "michaela.mcdermott@d4c.team",
+        "fax": "",
+        "firstName": "Michaela",
+        "lastName": "McDermott",
+        "mobile": "0474 880 180",
+        "notes": "",
+        "organisation": "D4C",
+        "phone": "",
+        "position": "Community Engagement Advisor",
+        "useLegacyLogin": false,
+        "usersourceid": "194"
+      },
+      "sendOnboardingEmail": false,
+      "stereotypeOperations": {
+        "Relate": [
+          "StandardUser"
+        ],
+        "Unrelate": []
+      }
+    },
+    {
+      "dataVersion": 1,
+      "values": {
+        "department": "",
+        "email": "natalie.zekis@d4c.team",
+        "fax": "",
+        "firstName": "Natalie",
+        "lastName": "Zekis",
+        "mobile": "0408 075 452",
+        "notes": "",
+        "organisation": "D4C",
+        "phone": "",
+        "position": "Community Engagement Advisor",
+        "useLegacyLogin": false,
+        "usersourceid": "193"
+      },
+      "sendOnboardingEmail": false,
+      "stereotypeOperations": {
+        "Relate": [
+          "StandardUser"
+        ],
+        "Unrelate": []
+      }
+    },
+    {
+      "dataVersion": 1,
+      "values": {
+        "department": "",
+        "email": "piro.chandran@sydneywater.com.au",
+        "fax": "",
+        "firstName": "Prio",
+        "lastName": "Chandran",
+        "mobile": "0429 683 142",
+        "notes": "",
+        "organisation": "Sydney Water",
+        "phone": "",
+        "position": "Project Manager",
+        "useLegacyLogin": false,
+        "usersourceid": "192"
+      },
+      "sendOnboardingEmail": false,
+      "stereotypeOperations": {
+        "Relate": [
+          "StandardUser"
+        ],
+        "Unrelate": []
+      }
+    }
+  ]
+}
+
+🔍 Raw Row 1:
+{
+  "dataVersion": 1,
+  "values": {
+    "department": "",
+    "email": "michaela.mcdermott@d4c.team",
+    "fax": "",
+    "firstName": "Michaela",
+    "lastName": "McDermott",
+    "mobile": "0474 880 180",
+    "notes": "",
+    "organisation": "D4C",
+    "phone": "",
+    "position": "Community Engagement Advisor",
+    "useLegacyLogin": false,
+    "usersourceid": "194"
+  },
+  "sendOnboardingEmail": false,
+  "stereotypeOperations": {
+    "Relate": [
+      "StandardUser"
+    ],
+    "Unrelate": []
+  }
+}
+
+🔍 Raw Row 2:
+{
+  "dataVersion": 1,
+  "values": {
+    "department": "",
+    "email": "natalie.zekis@d4c.team",
+    "fax": "",
+    "firstName": "Natalie",
+    "lastName": "Zekis",
+    "mobile": "0408 075 452",
+    "notes": "",
+    "organisation": "D4C",
+    "phone": "",
+    "position": "Community Engagement Advisor",
+    "useLegacyLogin": false,
+    "usersourceid": "193"
+  },
+  "sendOnboardingEmail": false,
+  "stereotypeOperations": {
+    "Relate": [
+      "StandardUser"
+    ],
+    "Unrelate": []
+  }
+}
+
+🔍 Raw Row 3:
+{
+  "dataVersion": 1,
+  "values": {
+    "department": "",
+    "email": "piro.chandran@sydneywater.com.au",
+    "fax": "",
+    "firstName": "Prio",
+    "lastName": "Chandran",
+    "mobile": "0429 683 142",
+    "notes": "",
+    "organisation": "Sydney Water",
+    "phone": "",
+    "position": "Project Manager",
+    "useLegacyLogin": false,
+    "usersourceid": "192"
+  },
+  "sendOnboardingEmail": false,
+  "stereotypeOperations": {
+    "Relate": [
+      "StandardUser"
+    ],
+    "Unrelate": []
+  }
+}
+

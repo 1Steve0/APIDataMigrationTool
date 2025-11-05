@@ -1,0 +1,7 @@
+﻿id,name,parent_id,hierarchyLevel,description
+1000,Postcodes,,/1000/,Group members by postcode
+1,4000,1000,/1000/1/,Brisbane CBD
+2,4001,1000,/1000/2/,Brisbane Postal Boxes
+3,4022,1000,/1000/3/,"Mansfield, Mt Gravatt"
+4,4059,1000,/1000/4/,Red Hill
+5,4157,1000,/1000/5/,Capalaba
