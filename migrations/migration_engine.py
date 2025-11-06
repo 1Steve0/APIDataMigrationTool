@@ -1,4 +1,5 @@
 import requests, json, time, csv
+from helpers.shared_logic import auto_map_fields, fetch_entity_definition
 
 class MigrationStats:
     def __init__(self):
@@ -34,7 +35,7 @@ class MigrationStats:
         fieldnames = [
             "row", "status", "name", "id", "message",
             "parentId", "description", "response_id",
-            "error", "log_method", "log_endpoint"
+            "error", "log_method", "log_endpoint","reason"
         ]
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -43,15 +44,14 @@ class MigrationStats:
                 writer.writerow({key: row.get(key, "") for key in fieldnames})
 
 def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_existing=False):
-    records = payload.get("records", [])
-    value_key = payload.get("valueKey", "values")
-    project_ops_key = payload.get("projectOperationsKey", "projectOperations")
-    data_version_key = payload.get("dataVersionKey", "dataVersion")
-    stats = MigrationStats()
     headers = {
         "Authorization": f"Bearer {auth_token}",
         "Content-Type": "application/json"
     }
+    definition_url = f"{api_url.replace('/entities/', '/definition/entity/')}"
+    entity_definition = fetch_entity_definition(definition_url, headers)
+    records = payload.get("records", [])
+    stats = MigrationStats()
 
     print("📡 Posting to:", api_url)
 
@@ -72,9 +72,18 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
     required_fields = REQUIRED_FIELDS.get(entity, [])
 
     for i, record in enumerate(records, start=1):
-
         stats.total += 1
-        values = record.get(value_key) if isinstance(record.get(value_key), dict) else record
+
+        # Build clean packet excluding 'id'
+        packet = {k: v for k, v in record.items() if k != "id"}
+
+        # Extract and clean values
+        values = record.get("values", {})
+        values = {k: v for k, v in values.items() if v not in ["", None]}
+
+        # Auto-map values to schema
+        mapped_values = auto_map_fields(values, entity_definition, operation_mode=migration_type)
+        packet["values"] = mapped_values
 
         def get_log_field(field):
             return record.get(field) or values.get(field, "")
@@ -83,8 +92,8 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
             if field in values and values[field] is None:
                 values[field] = ""
 
-        if migration_type != "update":
-
+        # Validate required fields
+        if migration_type == "insert":
             missing = [f for f in required_fields if values.get(f) in [None, ""]]
             if missing:
                 stats.log_skip(i, {
@@ -98,11 +107,8 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                 }, f"Missing required fields: {missing}")
                 continue
 
+        # Determine endpoint and method
         if migration_type == "update":
-            project_ops = record.get(project_ops_key)
-            if not isinstance(project_ops, dict):
-                print(f"⚠️ Using default empty projectOperations for row {i}")
-                project_ops = {"relate": [], "unrelate": []}
             record_id = record.get("id") or record.get("Id") or values.get("id")
             if not record_id:
                 stats.log_skip(i, {
@@ -115,18 +121,77 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                     "log_endpoint": f"{api_url}/<missing>"
                 }, "Missing ID for update")
                 continue
-
             endpoint = f"{api_url}/{record_id}"
             method = "PATCH"
             values.pop("id", None)
+        else:
+            endpoint = api_url
+            method = "POST"
 
-            payload_body = {
-                data_version_key: record.get(data_version_key, 1),
-                value_key: record.get(value_key, {})
-            }
-            payload_body[project_ops_key] = project_ops
+        print(f"📤 Row {i} → {method} {endpoint}")
+        print(f"📦 Final packet for row {i}:\n{json.dumps(packet, indent=2)}")
 
-            if not isinstance(payload_body.get(value_key), dict):
+        # Send request with retry
+        response = None
+        for attempt in range(1, 6):
+            try:
+                response = requests.request(method, endpoint, json=packet, headers=headers)
+                break
+            except requests.exceptions.RequestException as e:
+                print(f"⏳ Retry {attempt}/5 on row {i} due to: {str(e)}")
+                time.sleep(3)
+
+        if not response:
+            stats.log_skip(i, {
+                "row": i,
+                "name": get_log_field("name") or get_log_field("firstName"),
+                "parentId": get_log_field("parentId"),
+                "description": get_log_field("description"),
+                "response_id": "",
+                "log_method": method,
+                "log_endpoint": endpoint
+            }, "No response from server")
+            continue
+
+        # Parse response
+        try:
+            response_data = response.json()
+        except Exception as e:
+            print(f"⚠️ Failed to parse JSON for row {i}: {str(e)}")
+            stats.log_success(i, {
+                "row": i,
+                "name": get_log_field("name") or get_log_field("firstName"),
+                "parentId": get_log_field("parentId"),
+                "description": get_log_field("description"),
+                "response_id": "",
+                "log_method": method,
+                "log_endpoint": endpoint,
+                "id": record.get("id", ""),
+                "reason": "Non-JSON response, assumed success"
+            })
+            continue
+
+        # Handle success or error
+        if response.status_code in [200, 201, 204]:
+            response_id = response_data.get("id", "")
+            print(f"✅ Row {i} inserted successfully → ID {response_id}")
+            if "Errors" in response_data:
+                error = response_data["Errors"][0]
+                outcome = error.get("Outcome", {})
+                reason = ""
+                if outcome:
+                    for err_type, err_detail in outcome.items():
+                        reason = err_detail.get("Reason") or err_detail.get("Message") or err_type
+                        break
+                else:
+                    reason = error.get("Message", "Unknown error")
+
+                if "duplicate" in reason.lower() and "email" in reason.lower():
+                    reason = "Duplicate email in system"
+                if not reason:
+                    reason = "Unknown validation error"
+                print(f"❌ Row {i} rejected: {reason}")
+
                 stats.log_skip(i, {
                     "row": i,
                     "name": get_log_field("name") or get_log_field("firstName"),
@@ -135,73 +200,10 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                     "response_id": "",
                     "log_method": method,
                     "log_endpoint": endpoint,
-                    "id": record_id
-                }, f"Invalid '{value_key}' structure: expected dict")
-                continue
-        else:
-            endpoint = api_url
-            method = "POST"
-            payload_body = record
-
-        print(f"📤 Row {i} → {method} {endpoint}")
-        print(json.dumps(payload_body, indent=2))
-
-        MAX_RETRIES = 5
-        RETRY_DELAY = 30 #seconds
-        response = None
-
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                response = requests.request(method, endpoint, json=payload_body, headers=headers, timeout=10)
-                break
-            except requests.exceptions.RequestException as e:
-                print(f"⏳ Retry {attempt}/{MAX_RETRIES} on row {i} due to: {str(e)}")
-                if attempt < MAX_RETRIES:
-                    time.sleep(RETRY_DELAY)
-
-        if not response:
-            continue
-
-        if response.status_code in [200, 201, 204]:
-            try:
-                response_data = response.json()
-                if "Errors" in response_data:
-                    try:
-                        reason = (
-                            response_data["Errors"][0]
-                            .get("Outcome", {})
-                            .get("InvalidOperationValidationError", {})
-                            .get("Reason", "Unknown validation error")
-                        )
-                    except Exception as e:
-                        reason = f"Error parsing validation reason: {str(e)}"
-
-                elif "error" in response_data or "errors" in response_data:
-                    reason = json.dumps(response_data, indent=2)
-                    stats.log_skip(i, {
-                        "row": i,
-                        "name": get_log_field("name") or get_log_field("firstName"),
-                        "parentId": get_log_field("parentId"),
-                        "description": get_log_field("description"),
-                        "response_id": "",
-                        "log_method": method,
-                        "log_endpoint": endpoint,
-                        "id": record_id if migration_type == "update" else record.get("id", "")
-                    }, reason)
-                else:
-                    stats.log_success(i, {
-                        "row": i,
-                        "name": get_log_field("name") or get_log_field("firstName"),
-                        "parentId": get_log_field("parentId"),
-                        "description": get_log_field("description"),
-                        "response_id": response_data.get("id", ""),
-                        "log_method": method,
-                        "log_endpoint": endpoint,
-                        "id": record_id if migration_type == "update" else record.get("id", "")
-                    })
-            except Exception as e:
-                print(f"⚠️ Failed to parse JSON: {str(e)}")
-                stats.log_success(i, {
+                    "id": record.get("id", "")
+                }, reason)
+            elif "error" in response_data or "errors" in response_data:
+                stats.log_skip(i, {
                     "row": i,
                     "name": get_log_field("name") or get_log_field("firstName"),
                     "parentId": get_log_field("parentId"),
@@ -209,11 +211,29 @@ def migrate_records(payload, migration_type, api_url, auth_token, entity, purge_
                     "response_id": "",
                     "log_method": method,
                     "log_endpoint": endpoint,
-                    "id": record_id if migration_type == "update" else record.get("id", ""),
-                    "reason": "Non-JSON response, assumed success"
+                    "id": record.get("id", "")
+                }, json.dumps(response_data, indent=2))
+            else:
+                stats.log_success(i, {
+                    "row": i,
+                    "name": get_log_field("name") or get_log_field("firstName"),
+                    "parentId": get_log_field("parentId"),
+                    "description": get_log_field("description"),
+                    "response_id": response_data.get("id", ""),
+                    "log_method": method,
+                    "log_endpoint": endpoint,
+                    "id": record.get("id", "")
                 })
-                print(f"✅ Row {i} written successfully")
-        if not response_data.get("id"):
-            print(f"⚠️ No ID returned for row {i}, possible partial write")
+        else:
+            stats.log_skip(i, {
+                "row": i,
+                "name": get_log_field("name") or get_log_field("firstName"),
+                "parentId": get_log_field("parentId"),
+                "description": get_log_field("description"),
+                "response_id": "",
+                "log_method": method,
+                "log_endpoint": endpoint,
+                "id": record.get("id", "")
+            }, f"HTTP {response.status_code}: {response.text[:200]}")
 
     return stats.summary(), stats
