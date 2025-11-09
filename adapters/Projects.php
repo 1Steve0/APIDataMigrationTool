@@ -96,8 +96,13 @@ try {
         }
 
         $row = array_combine($normalizedHeader, $fields);
-        if (!$row || !isset($row["name"])) {
+        if (!$row) {
             fwrite(STDERR, "⚠️ Skipping invalid row: " . json_encode($row) . "\n");
+            continue;
+        }
+
+        if ($mode === 'insert' && empty(trim($row["name"] ?? ""))) {
+            fwrite(STDERR, "⚠️ Skipping insert row missing mandatory field (name): " . json_encode($row) . "\n");
             continue;
         }
 
@@ -178,15 +183,19 @@ try {
 
         $record = [
             "dataVersion" => 1,
-            "ProjectOperations" => [
-                "Relate" => [],
-                "Unrelate" => []
-            ],
             "Values" => $values
         ];
-        if ($mode === 'update') {
+        if ($mode === 'update') { //Update
             $record["id"] = $id;
         }
+        else { // Insert mode
+            $record["id"] = $id;
+            $record["projectOperations"] = [
+                "Relate" => [],
+                "Unrelate" => []
+            ];
+        }
+
 
         $records[] = $record;
     }
