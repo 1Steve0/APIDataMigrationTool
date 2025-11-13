@@ -9,11 +9,10 @@ def validate_credentials(email: str, password: str, base_url: str) -> bool:
     url = f"{base_url}/classifications"
 
     try:
-        response = requests.get(url, auth=(email, password))
+        response = requests.get(url, auth=(email, password), timeout=10)
         response.raise_for_status()
+        print("✅ Credential validation succeeded")
         return True
     except requests.exceptions.RequestException as e:
         print(f"❌ Credential validation failed: {e}")
         return False
-
-

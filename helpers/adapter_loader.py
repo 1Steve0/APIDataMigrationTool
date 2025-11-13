@@ -20,9 +20,9 @@ def run_php_adapter(adapter_path, input_file, migration_type):
             encoding="utf-8",
             check=True
         )
-        print("🔧 STDERR from adapter:")
-        print(result.stderr)
-        output = result.stdout.strip().lstrip('\ufeff')
+       
+       
+        output = result.stdout.encode().decode("utf-8-sig").strip()
         try:
             return json.loads(output)
         except json.JSONDecodeError as e:
@@ -34,13 +34,15 @@ def run_php_adapter(adapter_path, input_file, migration_type):
             }
 
     except subprocess.CalledProcessError as e:
+        print("❌ STDERR from adapter:")
+        print(e.stderr)
         return {
             "error": "Adapter execution failed",
             "details": str(e),
             "stdout": e.stdout,
             "stderr": e.stderr
-        }  
-    
+        }
+
 def validate_adapter_output(parsed_output):
     if not isinstance(parsed_output, dict):
         raise ValueError("Adapter output is not a dictionary")
@@ -53,8 +55,21 @@ def validate_adapter_output(parsed_output):
         raise ValueError("'records' must be a list")
 
     for i, record in enumerate(records, start=1):
-        values = record.get("Values") or record.get("values")
-        if not isinstance(values, dict):
-            raise ValueError(f"Record {i} missing valid 'Values' or 'values' dictionary")
+        preview = json.dumps(record, default=str)[:300]
+
+        # Legacy format: expects 'values' or 'Values' directly on the record
+        if "values" in record or "Values" in record:
+            values = record.get("Values") or record.get("values")
+            if not isinstance(values, dict):
+                raise ValueError(f"Record {i} has invalid 'values' dictionary: {preview}")
+
+        # Full packet format: expects 'payload' with nested 'values'
+        elif "payload" in record and isinstance(record["payload"], dict):
+            values = record["payload"].get("values")
+            if not isinstance(values, dict):
+                raise ValueError(f"Record {i} has invalid 'payload.values' dictionary: {preview}")
+
+        else:
+            raise ValueError(f"Record {i} missing 'values' or 'payload.values': {preview}")
 
     return records

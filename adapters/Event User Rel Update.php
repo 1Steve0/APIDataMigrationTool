@@ -1,7 +1,7 @@
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', 1);
-fwrite(STDERR, "🛠 EventUserLink Adapter started\n");
+fwrite(STDERR, "🛠 EventUserRel Adapter started\n");
 
 // === Helpers ===
 function normalizeEmpty($value) {
@@ -54,11 +54,23 @@ foreach ($lines as $rowIndex => $line) {
     }
 
     try {
+        $endpointBase = "https://swcclone.api.consultationmanager-preview.com/relationships/EventUser";
         $record = [
-            "DataVersion" => 1,
-            "values" => [
+            "method" => "POST",
+            "endpoint" => $endpointBase,
+            "payload" => [
+                "DataVersion" => 1,
+                "values" => [
+                    "LeftHandId" => intval($eventId),
+                    "RightHandId" => intval($userId)
+                ]
+            ],
+            "meta" => [
+                "name" => "EventUserRel",
+                "description" => "",
                 "LeftHandId" => intval($eventId),
-                "RightHandId" => intval($userId)
+                "RightHandId" => intval($userId),
+                "rowIndex" => $rowIndex + 2
             ]
         ];
 
@@ -78,6 +90,7 @@ foreach ($lines as $rowIndex => $line) {
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
+    "adapter_key"=> "event_user_relationship",
     "records" => $records
 ];
 
