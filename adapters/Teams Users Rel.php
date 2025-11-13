@@ -80,6 +80,7 @@ foreach ($lines as $line) {
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
+    "adapter_key"=> "teams_users_relationship",
     "records" => $records
 ];
 

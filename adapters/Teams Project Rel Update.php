@@ -1,3 +1,5 @@
+
+
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', 1);
@@ -61,7 +63,12 @@ foreach ($lines as $line) {
                 "relate" => [intval($projectId)],
                 "unrelate" => []
             ],
-            "values" => new stdClass() // empty object
+            "values" => new stdClass(), // empty object
+            "meta" => [
+                "id" => $teamId,  // 👈 Required for PATCH
+                "rowIndex" => count($records) + 2, // +2 accounts for 0-based index + header row
+                "source" => $row
+                ]
         ];
 
         $records[] = $record;
@@ -75,12 +82,22 @@ foreach ($lines as $line) {
         continue;
     }
 }
-
+$auditRows = [];
+foreach ($records as $record) {
+    $source = $record["meta"]["source"];
+    $auditRows[] = [
+        "rowIndex" => $record["meta"]["rowIndex"],
+        "team" => $source["team"] ?? "",
+        "project" => $source["project"] ?? ""
+    ];
+}
 // === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "records" => $records
+    "adapter_key"=> "teams_projects_relationship",
+    "records" => $records,
+     "auditRows" => $auditRows
 ];
 
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");

@@ -172,7 +172,7 @@ try {
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "valueKey" => "Values",
+    "adapter_key"=> "teams",
     "records" => $records
 ];
 

@@ -79,7 +79,7 @@ if (empty($records)) {
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "valueKey" => "values",
+    "adapter_key"=> "classifications",
     "records" => array_map(fn($r) => ["values" => $r], $records)
 ];
 

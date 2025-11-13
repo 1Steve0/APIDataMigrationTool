@@ -1,6 +1,7 @@
 #helpers/logger.py
 import time
 import csv
+from datetime import datetime
 
 class MigrationStats:
     def __init__(self):
@@ -34,16 +35,37 @@ class MigrationStats:
         }
 
     def write_csv(self, path):
+        base_path = path
+        print(f"🧾 [logger.py] Writing CSV to: {path}")
+        print(f"🧾 [logger.py] Total rows to write: {len(self.rows)}")
+
         fieldnames = [
-            "row", "status", "name", "id", "message",
-            "parentId", "description", "response_id",
-            "error", "log_method", "log_endpoint", "reason"
+            "row", "status", "name", "id", "message", "parentId", "description", "response_id",
+            "error", "log_method", "log_endpoint", "reason", "team", "project"
         ]
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in self.rows:
-                writer.writerow({key: row.get(key, "") for key in fieldnames})
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = f"{base_path}_{timestamp}.csv"
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for row in self.rows:
+                    if not isinstance(row, dict):
+                        print(f"❌ [logger.py] Skipping non-dict row: {row}")
+                        continue
+                    try:
+                        writer.writerow({key: row.get(key, "") for key in fieldnames})
+                    except Exception as e:
+                        print(f"❌ [logger.py] Failed to write row {row.get('row', '?')}: {e}")
+        except Exception as e:
+            print(f"❌ [logger.py] Failed to open/write file: {e}")
+            return
+
+        print(f"✅ [logger.py] CSV write complete: {path}")
+        
 
 def build_log_entry(i, method, endpoint, record, get_log_field, get_record_id):
     return {

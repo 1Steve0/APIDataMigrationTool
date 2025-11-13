@@ -49,8 +49,8 @@ ENTITY_ENDPOINTS = {
         "definition": "/definition/entity/project"
     },
     "teamProjectRelationship": {
-        "path": "/relationships/teamProjectRelationship",
-        "definition": "/definition/relationship/teamProjectRelationship"
+        "path": "/entities/team",
+        "definition": "/definition/entity/team"
     },
     "membershipUserTeam": {
         "path": "/relationships/membership",
