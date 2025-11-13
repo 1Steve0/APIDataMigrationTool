@@ -33,6 +33,7 @@ fwrite(STDERR, "🧾 Raw header: " . implode(", ", $rawHeader) . "\n");
 $normalizedHeader = array_map('strtolower', $rawHeader);
 $records = [];
 $skipped = 0;
+fwrite(STDERR, "🛠 TeamUser Adapter started\n");
 
 foreach ($lines as $line) {
     $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
@@ -44,24 +45,32 @@ foreach ($lines as $line) {
     }
 
     $row = array_combine($normalizedHeader, $fields);
-    $userId = normalizeEmpty($row["user"] ?? "");
-    $teamId = normalizeEmpty($row["team"] ?? "");
-
-    if ($userId === "" || $teamId === "") {
-        fwrite(STDERR, "⚠️ Skipping row missing User or Team: " . json_encode($row) . "\n");
+    $userIdRaw = normalizeEmpty($row["user"] ?? "");
+    $teamIdRaw = normalizeEmpty($row["team"] ?? "");
+    $userId = is_numeric($userIdRaw) ? intval($userIdRaw) : null;
+    $teamId = is_numeric($teamIdRaw) ? intval($teamIdRaw) : null;
+    $row["user"] = normalizeEmpty($row["user"] ?? "");
+    $row["team"] = normalizeEmpty($row["team"] ?? "");
+    if (is_null($userId) || is_null($teamId)) {
+        fwrite(STDERR, "⚠️ Skipping row with non-numeric User or Team: " . json_encode($row) . "\n");
         $skipped++;
         continue;
     }
-
+    fwrite(STDERR, "🔍 Parsed row: " . json_encode($row) . "\n");
+    fwrite(STDERR, "🔢 Extracted IDs → userIdRaw: {$userIdRaw}, teamIdRaw: {$teamIdRaw}, userId: {$userId}, teamId: {$teamId}\n");
     try {
         $record = [
             "id" => $userId,
-            "dataVersion" => 1,
-            "teamOperations" => [
-                "relate" => [intval($teamId)],
-                "unrelate" => []
+            "dataVersion" => 1,            
+            "values" => [
+                "LeftHandId" => $userId,
+                "RightHandId" => $teamId
             ],
-            "values" => new stdClass()
+            "meta" => [
+                "id" => $userId,
+                "rowIndex" => count($records) + 2,
+                "source" => $row
+            ]
         ];
 
         $records[] = $record;
@@ -75,13 +84,26 @@ foreach ($lines as $line) {
         continue;
     }
 }
+$auditRows = [];
+foreach ($records as $record) {
+    $source = $record["meta"]["source"];
+    $auditRows[] = [
+        "rowIndex" => $record["meta"]["rowIndex"],
+        "user" => normalizeEmpty($source["user"] ?? ""),
+        "team" => normalizeEmpty($source["team"] ?? ""),
+        "status" => "Pending",
+        "message" => ""
+
+    ];
+}
 
 // === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
     "adapter_key"=> "teams_users_relationship",
-    "records" => $records
+    "records" => $records,
+    "auditRows" => $auditRows
 ];
 
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
@@ -90,4 +112,6 @@ if ($json === false) {
     fwrite(STDERR, "❌ JSON encoding failed: " . json_last_error_msg() . "\n");
     exit(1);
 }
+fwrite(STDERR, "📋 AuditRows preview: " . json_encode($auditRows) . "\n");
 echo $json . "\n";
+fwrite(STDERR, "📊 Built " . count($records) . " records, skipped $skipped\n");

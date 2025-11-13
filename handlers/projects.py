@@ -53,7 +53,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
             continue
 
         meta = record.get("meta", {})
-        values = record.get("Values", {})
+        values = record.get("values", {})
         project_ops = record.get("projectOperations", {})
         data_version = record.get("DataVersion", 1)
 

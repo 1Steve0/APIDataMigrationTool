@@ -36,7 +36,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
         packet = {
             "dataVersion": record.get("DataVersion", 1),
             "projectOperations": record.get("ProjectOperations", {}),
-            "values": record.get("Values", {})
+            "values": record.get("values", {})
         }
 
         values = packet["values"]

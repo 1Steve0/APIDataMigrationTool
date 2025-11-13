@@ -1,3 +1,4 @@
+import json
 import csv
 import os
 from datetime import datetime
@@ -36,17 +37,38 @@ def write_csv(rows, path):
 
 def write_xlsx(rows, path):
     if not rows:
+        print(f"⚠️ [write_xlsx] No rows to write to: {path}")
         return
+
+    from openpyxl import Workbook
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Migration Results"
 
     headers = list(rows[0].keys())
     ws.append(headers)
-    for row in rows:
-        ws.append([row.get(h, "") for h in headers])
 
-    wb.save(path)
+    for i, row in enumerate(rows, start=1):
+        safe_row = []
+        for h in headers:
+            value = row.get(h, "")
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value)  # flatten nested structures
+            elif value is None:
+                value = ""
+            safe_row.append(str(value))  # ensure string-safe
+        try:
+            ws.append(safe_row)
+        except Exception as e:
+            print(f"❌ [write_xlsx] Failed to write row {i}: {e}")
+            print(f"🔍 Row content: {safe_row}")
+
+    try:
+        wb.save(path)
+        print(f"✅ [write_xlsx] Excel file saved: {path}")
+    except Exception as e:
+        print(f"❌ [write_xlsx] Failed to save Excel file: {e}")
 
 def write_pdf(rows, path):
     if not rows:

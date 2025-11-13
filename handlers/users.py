@@ -42,7 +42,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
             continue
 
         meta = record.get("meta", {})
-        values = record.get("Values", {})
+        values = record.get("values", {})
         stereotype_ops = record.get("stereotypeOperations", {})
         send_email = record.get("SendOnboardingEmail", False)
         data_version = record.get("DataVersion", 1)

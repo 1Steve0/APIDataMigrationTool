@@ -52,10 +52,15 @@ ENTITY_ENDPOINTS = {
         "path": "/entities/team",
         "definition": "/definition/entity/team"
     },
+    # DANGER REMOVE THIS AFTER TESTING BACK TO MEMBERSHIP is broken so testing on userstakeholder
     "membershipUserTeam": {
         "path": "/relationships/membership",
         "definition": "/definition/relationships/membership"
     },
+    # "membershipUserTeam": {   # WORKING BUT NOT CORRECT, NEED CORRECT END POINT FROM DYLAN
+    #     "path": "/relationships/userStakeholder",
+    #     "definition": "/definition/relationships/userStakeholder"
+    # },
     "eventUserRelationshipUpdate": {
         "path": "/relationships/EventUser",
         "definition": "/definition/relationships/EventUser"
