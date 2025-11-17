@@ -7,6 +7,7 @@ from handlers import users, classifications, projects, teams
 from handlers.relationships import (
     event_user,
     teams_users,
+    teams_users_unrelate,
     teams_projects,
 )
 
@@ -17,7 +18,8 @@ ADAPTER_HANDLERS = {
     "projects": projects.handle,
     "teams": teams.handle,
     "event_user_relationship": event_user.handle,
-    "teams_users_relationship": teams_users.handle,
+    "users_teams_role": teams_users.handle,
+    "users_teams_unrelate": teams_users_unrelate.handle,
     "teams_projects_relationship": teams_projects.handle
 }
 

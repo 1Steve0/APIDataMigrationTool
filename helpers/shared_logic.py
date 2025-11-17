@@ -13,7 +13,7 @@ def auto_map_fields(adapter_record, entity_definition, operation_mode="insert"):
 def fetch_entity_definition(definition_url, headers):
     response = requests.get(definition_url, headers=headers)
 
-    print("🔗 Definition URL:", definition_url)
+    # print("🔗 Definition URL:", definition_url)
     print("📦 Response status:", response.status_code)
     print("📦 Response content:", response.text[:500])
 

@@ -52,15 +52,19 @@ ENTITY_ENDPOINTS = {
         "path": "/entities/team",
         "definition": "/definition/entity/team"
     },
-    # DANGER REMOVE THIS AFTER TESTING BACK TO MEMBERSHIP is broken so testing on userstakeholder
-    "membershipUserTeam": {
-        "path": "/relationships/membership",
-        "definition": "/definition/relationships/membership"
+    #Membership uses this instead with User, Team, Role, handler adds to end to make it https://swcclone.api.consultationmanager-preview.com/security/{teamId}/assignusertoteam
+    "users_teams_role": {
+        "path": "/security",
+        "definition": "/definition/security"
     },
-    # "membershipUserTeam": {   # WORKING BUT NOT CORRECT, NEED CORRECT END POINT FROM DYLAN
-    #     "path": "/relationships/userStakeholder",
-    #     "definition": "/definition/relationships/userStakeholder"
-    # },
+    "users_teams_unrelate": {
+        "path": "/security",
+        "definition": "/definition/security"
+    },
+    "StakeholderUser": {   
+        "path": "/relationships/userStakeholder",
+        "definition": "/definition/relationships/userStakeholder"
+    },
     "eventUserRelationshipUpdate": {
         "path": "/relationships/EventUser",
         "definition": "/definition/relationships/EventUser"

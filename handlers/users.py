@@ -23,6 +23,18 @@
 #     "position": ""
 #   }
 # }
+
+# { #Update
+#     "dataVersion": 1,
+#     "SendOnboardingEmail": false,
+#     "stereotypeOperations": {
+#         "Relate": [],
+#         "Unrelate": []
+#     },
+#     "values": {
+#         "usersourceid": "9999"
+#     }
+# }
 import requests
 from helpers.shared_logic import auto_map_fields, fetch_entity_definition, build_auth_headers
 from helpers.logger import MigrationStats, build_log_entry
@@ -47,9 +59,9 @@ def handle(payload, migration_type, api_url, auth_token, entity):
         send_email = record.get("SendOnboardingEmail", False)
         data_version = record.get("DataVersion", 1)
 
-        if not values.get("email") or not values.get("firstName"):
-            stats.log_skip(i, meta, "Missing required fields: email or firstName")
-            continue
+        # if not values.get("email") or not values.get("firstName"):
+        #     stats.log_skip(i, meta, "Missing required fields: email or firstName")
+        #     continue
 
         mapped_values = auto_map_fields(values, entity_definition, operation_mode=migration_type)
 
@@ -67,9 +79,11 @@ def handle(payload, migration_type, api_url, auth_token, entity):
                 continue
             endpoint = f"{api_url}/{record_id}"
             method = "PATCH"
+            print(f"🔧 Row {i}: PATCH to {endpoint} for user ID {record_id}\n{packet}")
         else:
             endpoint = api_url
             method = "POST"
+
 
         def get_log_field(field):
             return meta.get(field, "")

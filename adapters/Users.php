@@ -27,18 +27,19 @@ if (count($lines) < 2) {
 
 // === Header Mapping ===
 $headerMap = [
-    "source id (admin only)" => "usersourceid",
-    "first name"             => "firstName",
-    "last name"              => "lastName",
-    "position"               => "position",
-    "department"             => "department",
-    "organisation"           => "organisation",
-    "organisation name"      => "organisation",
-    "phone"                  => "phone",
-    "mobile"                 => "mobile",
-    "fax"                    => "fax",
-    "email"                  => "email",
-    "login"                  => "login"
+    "id"=> "id",
+    "source id (admin only)" => "usersourceid"
+    // "first name"             => "firstName",
+    // "last name"              => "lastName",
+    // "position"               => "position",
+    // "department"             => "department",
+    // "organisation"           => "organisation",
+    // "organisation name"      => "organisation",
+    // "phone"                  => "phone",
+    // "mobile"                 => "mobile",
+    // "fax"                    => "fax",
+    // "email"                  => "email",
+    // "login"                  => "login"
 ];
 
 // === Normalize Header ===
@@ -80,6 +81,11 @@ foreach ($lines as $line) {
     }
 
     $row = array_combine($normalizedHeader, $fields);
+    if (empty($row["__ID__"])) {
+        fwrite(STDERR, "⚠️ Skipping row with missing ID: " . json_encode($row) . "\n");
+        $skipped++;
+        continue;
+    }
 
     if ($migrationType === "insert" && (
         empty(trim($row["firstName"] ?? "")) || empty(trim($row["email"] ?? ""))
@@ -92,12 +98,20 @@ foreach ($lines as $line) {
     try {
         $record = [
             "dataVersion" => 1,
-            "sendOnboardingEmail" => false,
-            "values" => [],
             "stereotypeOperations" => [
-                "Relate" => ["StandardUser"],
+                "Relate" => [],
                 "Unrelate" => []
-            ]
+            ],
+            "sendOnboardingEmail" => True,
+            "values" => [
+                // "usersourceid" => $row["id"]
+        ],
+
+            "meta" => [
+                "id" => $row["__ID__"] ?? null,  // 👈 Required for PATCH
+                "rowIndex" => count($records) + 2, // +2 accounts for 0-based index + header row
+                "source" => $row
+                ]
         ];
 
         if ($migrationType === "update" && !empty($row["__ID__"])) {
@@ -110,10 +124,10 @@ foreach ($lines as $line) {
                 $record["values"][$key] = normalizeEmpty($row[$key]);
             }
         }
-        if ($migrationType === "update"){
-            $record["values"]["useLegacyLogin"] = $record["values"]["useLegacyLogin"] ?? false;
-            $record["values"]["login"] = $record["values"]["login"] ?? "";
-        }
+        // if ($migrationType === "update"){
+        //     $record["values"]["useLegacyLogin"] = $record["values"]["useLegacyLogin"] ?? false;
+        //     $record["values"]["login"] = $record["values"]["login"] ?? "";
+        // }
 
         $records[] = $record;
 
@@ -135,6 +149,8 @@ $output = [
     "records" => $records
 ];
 
+fwrite(STDERR, "🔍 Parsed row: " . json_encode($row) . "\n");
+fwrite(STDERR, "🔎 Extracted ID: " . ($row["__ID__"] ?? 'null') . "\n");
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
 $json = json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {

@@ -1,7 +1,7 @@
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', 1);
-fwrite(STDERR, "🛠 TeamProject Adapter started\n");
+fwrite(STDERR, "🛠 UserTeam Adapter started\n");
 
 // === Helpers ===
 function normalizeEmpty($value) {
@@ -33,6 +33,7 @@ fwrite(STDERR, "🧾 Raw header: " . implode(", ", $rawHeader) . "\n");
 $normalizedHeader = array_map('strtolower', $rawHeader);
 $records = [];
 $skipped = 0;
+fwrite(STDERR, "🛠 TeamUser Adapter started\n");
 
 foreach ($lines as $line) {
     $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
@@ -44,29 +45,36 @@ foreach ($lines as $line) {
     }
 
     $row = array_combine($normalizedHeader, $fields);
-    $teamId = normalizeEmpty($row["team"] ?? "");
-    $projectId = normalizeEmpty($row["project"] ?? "");
-
-    if ($teamId === "" || $projectId === "") {
-        fwrite(STDERR, "⚠️ Skipping row missing Team or Project: " . json_encode($row) . "\n");
+    $userIdRaw = normalizeEmpty($row["user"] ?? "");
+    $teamIdRaw = normalizeEmpty($row["team"] ?? "");
+    $userId = is_numeric($userIdRaw) ? intval($userIdRaw) : null;
+    $teamId = is_numeric($teamIdRaw) ? intval($teamIdRaw) : null;
+    $row["user"] = normalizeEmpty($row["user"] ?? "");
+    $row["team"] = normalizeEmpty($row["team"] ?? "");
+    $row["team role"] = normalizeEmpty($row["team role"] ?? "");
+    $teamrole = normalizeEmpty($row["team role"] ?? "");
+    if (is_null($userId) || is_null($teamId)) {
+        fwrite(STDERR, "⚠️ Skipping row with non-numeric User or Team: " . json_encode($row) . "\n");
         $skipped++;
         continue;
     }
-
+    if (is_null($teamrole)) {
+        fwrite(STDERR, "⚠️ Skipping row with blank Team Role: " . json_encode($row) . "\n");
+        $skipped++;
+        continue;
+    }
+    fwrite(STDERR, "🔍 Parsed row: " . json_encode($row) . "\n");
+    fwrite(STDERR, "🔢 Extracted IDs → userIdRaw: {$userIdRaw}, teamIdRaw: {$teamIdRaw}, userId: {$userId}, teamId: {$teamId}\n");
     try {
         $record = [
-            "id" => $teamId,
-            "dataVersion" => 1,
-            "projectOperations" => [
-                "relate" => [intval($projectId)],
-                "unrelate" => []
-            ],
-            "values" => new stdClass(), // empty object
+            "userId" => $userId,
             "meta" => [
-                "id" => $teamId,  // 👈 Required for PATCH
-                "rowIndex" => count($records) + 2, // +2 accounts for 0-based index + header row
+                "id" => $userId,
+                "user_id" => $userId,
+                "team_id" => $teamId,
+                "rowIndex" => count($records) + 2,
                 "source" => $row
-                ]
+            ]
         ];
 
         $records[] = $record;
@@ -85,15 +93,19 @@ foreach ($records as $record) {
     $source = $record["meta"]["source"];
     $auditRows[] = [
         "rowIndex" => $record["meta"]["rowIndex"],
-        "team" => $source["team"] ?? "",
-        "project" => $source["project"] ?? ""
+        "user" => normalizeEmpty($source["user"] ?? ""),
+        "team" => normalizeEmpty($source["team"] ?? ""),
+        "status" => "Pending",
+        "message" => ""
+
     ];
 }
+
 // === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "adapter_key"=> "teams_projects_relationship",
+    "adapter_key"=> "users_teams_unrelate",
     "records" => $records,
     "auditRows" => $auditRows
 ];
@@ -104,4 +116,6 @@ if ($json === false) {
     fwrite(STDERR, "❌ JSON encoding failed: " . json_last_error_msg() . "\n");
     exit(1);
 }
+fwrite(STDERR, "📋 AuditRows preview: " . json_encode($auditRows) . "\n");
 echo $json . "\n";
+fwrite(STDERR, "📊 Built " . count($records) . " records, skipped $skipped\n");
