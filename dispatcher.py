@@ -9,6 +9,7 @@ from handlers.relationships import (
     teams_users,
     teams_users_unrelate,
     teams_projects,
+    teams_projects_unrelate
 )
 
 # === Adapter key → handler mapping ===
@@ -20,7 +21,8 @@ ADAPTER_HANDLERS = {
     "event_user_relationship": event_user.handle,
     "users_teams_role": teams_users.handle,
     "users_teams_unrelate": teams_users_unrelate.handle,
-    "teams_projects_relationship": teams_projects.handle
+    "teams_projects_relationship": teams_projects.handle,
+    "teams_projects_unrelate": teams_projects_unrelate.handle
 }
 
 # === Dispatcher entry point ===

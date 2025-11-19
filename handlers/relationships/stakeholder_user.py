@@ -59,7 +59,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
         sys.stdout.flush()
 
         try:
-            response = requests.request(method, endpoint, json=packet, headers=headers, timeout=10)
+            response = requests.request(method, endpoint, json=packet, headers=headers, timeout=180)
             log_entry["message"] = response.text.strip() or "No response body"
             log_entry["error"] = ""
             log_entry["user"] = get_log_field("user")

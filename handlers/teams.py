@@ -64,7 +64,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
         log_entry = build_log_entry(i, method, endpoint, record, get_log_field, get_record_id)
 
         try:
-            response = requests.request(method, endpoint, headers=headers, json=packet, timeout=10)
+            response = requests.request(method, endpoint, headers=headers, json=packet, timeout=180)
             if response.status_code in [200, 201, 204]:
                 stats.log_success(i, log_entry)
             else:
