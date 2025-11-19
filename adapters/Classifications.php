@@ -1,7 +1,7 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-fwrite(STDERR, "🛠 Adapter started\n");
+fwrite(STDERR, "🛠 Classifications adapter started (supports postcodes, stakeholder groups, distribution lists and more)\n");
 
 // === Input Path ===
 $inputPath = trim($argv[1] ?? '', " \t\n\r\0\x0B\"'");
@@ -44,7 +44,7 @@ if ($missing) {
 
 // === Build Records ===
 $records = [];
-foreach ($lines as $line) {
+foreach ($lines as $index => $line) {
     $row = array_combine($normalizedHeader, array_map('trim', str_getcsv($line, ",", '"', "\\")));
     if (!$row) {
         fwrite(STDERR, "⚠️ Skipping malformed row: " . $line . "\n");
@@ -62,12 +62,23 @@ foreach ($lines as $line) {
 
     // Build record
     $records[] = [
-        "classificationType" => $classificationType,
-        "dataVersion" => 0,
-        "deleted" => false,
-        "description" => $row["description"] ?: null,
-        "name" => $row["name"],
-        "parentId" => (int) $row["parent_id"]
+        "values" => [
+            "classificationType" => $classificationType,
+            "dataVersion" => 0,
+            "deleted" => false,
+            "description" => $row["description"] ?: null,
+            "name" => $row["name"],
+            "parentId" => (int) $row["parent_id"]            
+        ],
+        "meta" => [
+            "rowIndex" => $index + 2,
+            "name" => $row["name"],
+            "parent_id" => $row["parent_id"],
+            "description" => $row["description"] ?? "",
+            "header" => $row["header"] ?? "",
+            "adapter_name" => basename(__FILE__, ".php"),
+            "raw" => $line
+        ]
     ];
 }
 if (empty($records)) {
@@ -80,7 +91,7 @@ $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
     "adapter_key"=> "classifications",
-    "records" => array_map(fn($r) => ["values" => $r], $records)
+    "records" => $records
 ];
 
 echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

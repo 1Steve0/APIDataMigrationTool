@@ -11,6 +11,7 @@ from handlers.relationships import (
     teams_projects,
     teams_projects_unrelate
 )
+print("✅ dispatcher.py loaded — expecting 7 args")
 
 # === Adapter key → handler mapping ===
 ADAPTER_HANDLERS = {
@@ -26,7 +27,7 @@ ADAPTER_HANDLERS = {
 }
 
 # === Dispatcher entry point ===
-def dispatch(adapter_key, payload, migration_type, api_url, auth_token, entity):
+def dispatch(adapter_key, payload, migration_type, api_url, auth_token, entity):    
     handler = ADAPTER_HANDLERS.get(adapter_key)
     if not handler:
         raise ValueError(f"❌ No handler defined for adapter key: '{adapter_key}'")

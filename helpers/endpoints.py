@@ -56,7 +56,6 @@ ENTITY_ENDPOINTS = {
         "path": "/entities/team",
         "definition": "/definition/entity/team"
     },
-    #Membership uses this instead with User, Team, Role, handler adds to end to make it https://swcclone.api.consultationmanager-preview.com/security/{teamId}/assignusertoteam
     "users_teams_role": {
         "path": "/security",
         "definition": "/definition/security"
