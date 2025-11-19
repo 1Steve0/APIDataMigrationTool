@@ -65,6 +65,8 @@ foreach ($lines as $line) {
             "meta" => [
                 "id" => $teamId,  // 👈 Required for PATCH
                 "rowIndex" => count($records) + 2, // +2 accounts for 0-based index + header row
+                "team" => $teamId,
+                "project" => $projectId,
                 "source" => $row
                 ]
         ];
@@ -80,22 +82,14 @@ foreach ($lines as $line) {
         continue;
     }
 }
-$auditRows = [];
-foreach ($records as $record) {
-    $source = $record["meta"]["source"];
-    $auditRows[] = [
-        "rowIndex" => $record["meta"]["rowIndex"],
-        "team" => $source["team"] ?? "",
-        "project" => $source["project"] ?? ""
-    ];
-}
 // === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
     "adapter_key"=> "teams_projects_relationship",
-    "records" => $records,
-    "auditRows" => $auditRows
+    "skippedCount" => $skipped,
+    "recordIndex" => count($records) + 1,
+    "records" => $records
 ];
 
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");

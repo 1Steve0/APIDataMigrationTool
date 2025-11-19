@@ -2,6 +2,7 @@
 import time
 import csv
 from datetime import datetime
+from pathlib import Path
 
 def debug(msg):
     print(f"🐛 [debug] {datetime.now().isoformat()} — {msg}")
@@ -39,7 +40,7 @@ class MigrationStats:
             "rows": self.rows
         }
 
-    def write_csv(self, path):
+    def write_summary_csv(self, path):
         base_path = path
         print(f"🧾 [logger.py] Writing CSV to: {path}")
         print(f"🧾 [logger.py] Total rows to write: {len(self.rows)}")
@@ -87,3 +88,25 @@ def build_log_entry(i, method, endpoint, record, get_log_field, get_record_id):
         "id": get_record_id(),
         "reason": ""  # ✅ Default placeholder
     }
+
+def write_detailed_audit_csv(stats, entity):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    audit_path = Path(f"audit/migration_log_{entity}_{timestamp}.csv")
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Dynamically collect all unique fieldnames across all rows
+    fieldnames = sorted({key for row in stats.rows if isinstance(row, dict) for key in row.keys()})
+
+    print(f"🧾 Writing detailed audit to {audit_path} with {len(stats.rows)} rows and {len(fieldnames)} fields")
+
+    try:
+        with audit_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            if not stats.rows:
+                print(f"⚠️ No rows to write for {entity}, these can be added to php adapter — skipping audit CSV.")
+                return
+            for row in stats.rows:
+                writer.writerow({key: row.get(key, "") for key in fieldnames})
+    except Exception as e:
+        print(f"❌ Failed to write detailed audit CSV: {e}")
