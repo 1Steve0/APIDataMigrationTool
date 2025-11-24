@@ -15,19 +15,23 @@ class MigrationStats:
         self.errors = []
         self.rows = []
         self.start_time = time.time()
+        self.skip_reasons = []
 
-    def log_success(self, row_index, log_entry):
+    def log_success(self, row_index, log_entry, message=""):
         self.success += 1
         log_entry["status"] = "Success"
-        log_entry["rowIndex"] = row_index 
+        log_entry["rowIndex"] = row_index
+        if message:
+            log_entry["message"] = str(message)   # ensure string
         self.rows.append(log_entry)
 
     def log_skip(self, row_index, log_entry, reason):
         self.skipped += 1
-        log_entry["reason"] = reason
+        log_entry["reason"] = str(reason)   # force to string
         log_entry["status"] = "Skipped"
         log_entry["rowIndex"] = row_index 
-        self.errors.append(reason)
+        self.errors.append(str(reason))     # force to string
+        self.skip_reasons.append(str(reason))
         self.rows.append(log_entry)
 
     def summary(self):
@@ -45,11 +49,8 @@ class MigrationStats:
         print(f"🧾 [logger.py] Writing CSV to: {path}")
         print(f"🧾 [logger.py] Total rows to write: {len(self.rows)}")
 
-        fieldnames = [
-            "row", "rowIndex","status", "name", "id", "message", "parentId", "description", "response_id",
-            "error", "log_method", "log_endpoint", "reason", "team", "project", "source","user"
-        ]
-        
+        fieldnames = sorted({key for row in self.rows if isinstance(row, dict) for key in row.keys()})
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = f"{base_path}_{timestamp}.csv"
         

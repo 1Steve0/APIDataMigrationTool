@@ -4,36 +4,31 @@ import os
 from datetime import datetime
 from openpyxl import Workbook
 from fpdf import FPDF
+from pathlib import Path
 
 def generate_report_files(summary, adapter_name, entity, migration_type):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_name = f"{entity}_{migration_type}_{adapter_name}_{timestamp}"
-    output_dir = "static/reports"
-    os.makedirs(output_dir, exist_ok=True)
+    base_name = f"migration_api_{adapter_name}_{timestamp}"
+    output_dir = Path(__file__).resolve().parent.parent / "auditreports"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_path = os.path.join(output_dir, f"{base_name}.csv")
-    xlsx_path = os.path.join(output_dir, f"{base_name}.xlsx")
-    pdf_path = os.path.join(output_dir, f"{base_name}.pdf")
+    csv_path = output_dir / f"{base_name}.csv"
 
     write_csv(summary["rows"], csv_path)
-    write_xlsx(summary["rows"], xlsx_path)
-    write_pdf(summary["rows"], pdf_path)
 
     return {
-        "csv": os.path.basename(csv_path),
-        "xlsx": os.path.basename(xlsx_path),
-        "pdf": os.path.basename(pdf_path)
+        "csv": csv_path.name
     }
 
 def write_csv(rows, path):
     if not rows:
         return
-    fieldnames = rows[0].keys()
+    fieldnames = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow(row)
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
 
 def write_xlsx(rows, path):
     if not rows:
@@ -77,7 +72,7 @@ def write_pdf(rows, path):
     pdf.add_page()
     pdf.set_font("Arial", size=10)
 
-    headers = list(rows[0].keys())
+    headers = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
     col_width = 190 / len(headers)
 
     # Header
@@ -89,7 +84,7 @@ def write_pdf(rows, path):
     for row in rows:
         for header in headers:
             cell = str(row.get(header, ""))
-            pdf.cell(col_width, 10, cell[:30], border=1)  # truncate long text
+            pdf.cell(col_width, 10, cell[:120], border=1)  # allow more characters
         pdf.ln()
 
     pdf.output(path)

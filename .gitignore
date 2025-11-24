@@ -5,8 +5,9 @@
 
 # Project Specific
 Project Design/
-audit/
+auditreports/
 reports/
+audit/
 
 # Node artifact files
 node_modules/

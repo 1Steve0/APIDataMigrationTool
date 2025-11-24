@@ -18,6 +18,19 @@ import datetime
 from helpers.shared_logic import fetch_entity_definition, auto_map_fields, build_auth_headers
 from helpers.logger import MigrationStats, build_log_entry, write_detailed_audit_csv
 from helpers.endpoints import ENTITY_ENDPOINTS
+import os
+import csv
+
+adapter_name = "classifications"
+
+# Repo root = parent of current script directory
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+report_dir = os.path.join(repo_root, "auditreports")
+os.makedirs(report_dir, exist_ok=True)
+
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+audit_file = os.path.join(report_dir, f"migration_log_{adapter_name}_{timestamp}.csv")
+payload_file = os.path.join(report_dir, f"payload_{adapter_name}_{timestamp}.json")
 
 def handle(payload, migration_type, api_url, auth_token, entity):
     print("✅ classifications.handle() received definition_url")
@@ -114,6 +127,16 @@ def handle(payload, migration_type, api_url, auth_token, entity):
 
         print(f"📥 Response for Record {i}: {status_code} — {message[:200]}")
 
+    # After processing records
     write_detailed_audit_csv(stats, "classifications")
-    stats.write_summary_csv("audit/migration_summary_classifications.csv")
-    return stats.summary(), stats
+    
+    # After writing audit and summary CSVs
+    summary_dict = {
+        "total": stats.total,
+        "success": stats.success,
+        "skipped": stats.skipped,
+        "errors": stats.errors,
+        "rows": stats.rows,
+        "generatedAt": datetime.datetime.now().isoformat()
+    }
+    return summary_dict, stats

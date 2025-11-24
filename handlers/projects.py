@@ -1,40 +1,34 @@
 # projects.py
-# {
-#   "DataVersion": 1,
-#   "projectOperations":{
-#       "Relate": [],
-#       "Unrelate":[]
+
+#  {"dataVersion": 1,
+#       "values": {
+#         "address.address": "",
+#         "address.autoGeocode": true,
+#         "address.country": "",
+#         "address.location": {
+#                 "latitude": "-34.5115149",
+#                 "longitude": "150.7931905",
+#                 "type": "Point"
+#             },
+#         "address.postCode": "",
+#         "address.state": "",
+#         "address.suburb": "",
+#         "dateEnd": "2025-10-22T00:32:49",
+#         "dateStart": "2025-10-22T00:32:49",
+#         "name": "Glasshouse Mountains9",
+#         "notes": "P0001757",
+#         "projectsourceid": "36",
+#         "projectGroup": {
+#           "assign": [5337],
+#           "unassign": []
 #         },
-#   "Values": {
-#     "address.address": "",
-#     "address.autoGeocode": false,
-#     "address.country": "",
-#     "address.location": {
-#             "latitude": "-34.5115149",
-#             "longitude": "150.7931905",
-#             "type": "Point"
-#         },
-#     "address.postCode": "",
-#     "address.state": "",
-#     "address.suburb": "",
-#     "dateEnd": "2025-11-12T08:03:18",
-#     "dateStart": "2025-11-12T08:03:18",
-#     "name": "",
-#     "notes": "",
-#     "projectemailaddress": "",
-#     "projectGroup": {
-#       "assign": [
-#         0
-#       ],
-#       "unassign": [
-#         0
-#       ]
-#     },
-#     "projectsourceid": "",
-#     "timeZone": ""
-#   }
-# }
+#         "timeZone": "Australia/Sydney"
+#       }
+#     }
+
 import requests
+import time
+from urllib.parse import urlparse
 from helpers.shared_logic import fetch_entity_definition, auto_map_fields, build_auth_headers
 from helpers.logger import MigrationStats, build_log_entry
 
@@ -42,9 +36,9 @@ def handle(payload, migration_type, api_url, auth_token, entity):
     headers = build_auth_headers(auth_token)
     stats = MigrationStats()
     records = payload.get("records", [])
-
     definition_url = api_url.replace("/entities/", "/definition/entity/")
     entity_definition = fetch_entity_definition(definition_url, headers)
+    print(f"📡 Endpoint: {api_url}")
 
     for i, record in enumerate(records, start=1):
         stats.total += 1
@@ -89,12 +83,47 @@ def handle(payload, migration_type, api_url, auth_token, entity):
         log_entry = build_log_entry(i, method, endpoint, record, get_log_field, get_record_id)
 
         try:
-            response = requests.request(method, endpoint, json=packet, headers=headers, timeout=10)
-            if response.status_code in [200, 201, 204]:
-                stats.log_success(i, log_entry)
+            start_time = time.time()
+            response = requests.request(method, endpoint, json=packet, headers=headers, timeout=180)
+            duration = round(time.time() - start_time, 2)
+
+            status_code = response.status_code
+            project_name = values.get("name", "<no name>")
+            record_id = get_record_id()
+            endpoint_path = urlparse(endpoint).path
+
+            # Build row result including API response
+            response_text = response.text.strip()
+            row_result = {
+                "rowIndex": i,
+                "recordId": record_id,
+                "project": project_name,
+                "endpoint": endpoint,
+                "status": status_code,
+                "result": "Success" if status_code in [200, 201, 204] and "ErrorMessage" not in response_text else "Skipped",
+                "response": response_text[:500]  # truncate to avoid huge cells
+            }
+            stats.rows.append(row_result)
+
+            if status_code in [200, 201, 204] and "ErrorMessage" not in response_text:
+                print(f"✅ Row: {i} | Record Id: {record_id} | Project: {project_name} | "
+                    f"Status: {status_code} | Endpoint: {endpoint_path} | Result: Success | Duration: {duration}s")
+                stats.log_success(i, log_entry, f"Response: {response_text[:200]}")
             else:
-                stats.log_skip(i, log_entry, f"HTTP {response.status_code}: {response.text[:200]}")
+                reason = response_text[:200]
+                print(f"❌ Row: {i} | Record Id: {record_id} | Project: {project_name} | "
+                    f"Status: {status_code} | Endpoint: {endpoint_path} | Reason: {reason} | Result: Skipped | Duration: {duration}s")
+                stats.log_skip(i, log_entry, f"HTTP {status_code}: {reason}")
+
         except Exception as e:
             stats.log_skip(i, log_entry, f"Request failed: {str(e)}")
+
+    print(f"🕒 Completed migration for {entity} — {stats.total} rows processed")
+
+    # Print summary of skipped reasons
+    if stats.skipped > 0:
+        print("⚠️ Skipped Reasons:")
+        for reason in stats.skip_reasons:
+            print(f"   - {reason}")
 
     return stats.summary(), stats

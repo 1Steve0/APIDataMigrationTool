@@ -12,38 +12,38 @@ ENTITY_ENDPOINTS = {
         "path": "/classifications",
         "definition": "/definition/classifications"
     },
-    "stakeholder": {
-        "path": "/entities/stakeholder",
-        "definition": "/definition/entity/stakeholder"
-    },
-    "event": {
-        "path": "/entities/event",
-        "definition": "/definition/entity/event"
-    },
+    # "stakeholder": {
+    #     "path": "/entities/stakeholder",
+    #     "definition": "/definition/entity/stakeholder"
+    # },
+    # "event": {
+    #     "path": "/entities/event",
+    #     "definition": "/definition/entity/event"
+    # },
     "users": {
         "path": "/entities/user",
         "definition": "/definition/entity/user"
     },
-    "property": {
-        "path": "/entities/property",
-        "definition": "/definition/entity/property"
-    },
-    "action": {
-        "path": "/entities/action",
-        "definition": "/definition/entity/action"
-    },
+    # "property": {
+    #     "path": "/entities/property",
+    #     "definition": "/definition/entity/property"
+    # },
+    # "action": {
+    #     "path": "/entities/action",
+    #     "definition": "/definition/entity/action"
+    # },
     "teams": {
         "path": "/entities/team",
         "definition": "/definition/entity/team"
     },
-    "documents": {
-        "path": "/entities/documents",
-        "definition": "/definition/entity/documents"
-    },
-    "organisation": {
-        "path": "/entities/organisation",
-        "definition": "/definition/entity/organisation"
-    },
+    # "documents": {
+    #     "path": "/entities/documents",
+    #     "definition": "/definition/entity/documents"
+    # },
+    # "organisation": {
+    #     "path": "/entities/organisation",
+    #     "definition": "/definition/entity/organisation"
+    # },
     "project": {
         "path": "/entities/project",
         "definition": "/definition/entity/project"

@@ -4,51 +4,36 @@ ini_set('log_errors', 1);
 ini_set('error_log', 'php://stderr');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
 
-$mode = strtolower($argv[2] ?? 'insert'); // default to insert
+$mode = strtolower($argv[2] ?? 'insert');
 
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
 }
+function hasColumn($key, $normalizedHeader) { return in_array($key, $normalizedHeader); }
+function log_audit($fp,$idx,$name,$group,$msg,$result){ fputcsv($fp,[$idx,$name??"",$group??"",$msg,$result]); }
 
-function hasColumn($key, $normalizedHeader) {
-    return in_array($key, $normalizedHeader);
-}
-// === Input Path ===
+// Input path
 $inputPath = trim($argv[1] ?? '', " \t\n\r\0\x0B\"'");
 if (!is_readable($inputPath)) {
     echo json_encode(["error" => "File not found or unreadable", "path" => $inputPath]);
     exit(1);
 }
 
-// === Load CSV ===
+// Load CSV
 $lines = file($inputPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 if (count($lines) < 2) {
     echo json_encode(["error" => "CSV file is empty or malformed"]);
     exit(1);
 }
 
-// === Load Lookup Map ===
-$lookup_path = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Project.csv";
-$lookup_map = [];
+// Lookup map
+$lookup_map = [
+    "North:Project Group1" => 5330,
+    "South:Project Group2" => 5337,
+    "North:Project Group3" => 5341
+];
 
-if (($handle = fopen($lookup_path, "r")) !== false) {
-    $header = fgetcsv($handle);
-    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
-    while (($data = fgetcsv($handle)) !== false) {
-        $row = array_combine($header, $data);
-        $group_name = trim($row["Import Path"]);
-        $group_id = trim($row["Id"]);
-        if ($group_name !== "") {
-            if (isset($lookup_map[$group_name])) {
-                fwrite(STDERR, "⚠️ Duplicate group label in lookup: '{$group_name}'\n");
-            }
-            $lookup_map[$group_name] = $group_id;
-        }
-    }
-    fclose($handle);
-}
-
-// === Header Mapping ===
+// Header mapping
 $headerMap = [
     "Id" => "id",
     "Name" => "name",
@@ -65,147 +50,152 @@ $headerMap = [
     "Source Id (Admin Only)" => "projectsourceid"
 ];
 
-// === Normalize Header ===
+// Normalize header
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
 $rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]);
-
 $normalizedHeader = array_map(function ($col) use ($headerMap) {
     $mapped = $headerMap[$col] ?? $col;
     return is_array($mapped) ? implode('.', $mapped) : $mapped;
 }, $rawHeader);
 
-// === Validate Columns ===
-$expected = array_map(function ($v) {
-    return is_array($v) ? implode('.', $v) : $v;
-}, array_values($headerMap));
+// Validate columns
+$expected = array_map(function ($v) { return is_array($v) ? implode('.', $v) : $v; }, array_values($headerMap));
 $missing = array_diff($expected, $normalizedHeader);
 if ($missing) {
     fwrite(STDERR, "⚠️ Warning: Missing expected columns: " . implode(", ", $missing) . "\n");
 }
 
-// === Build Records ===
+// Build records
 $records = [];
 $timestamp = date("Y-m-d\TH:i:s");
 
 try {
-    foreach ($lines as $line) {
+    $adapterName = "projects";
+    // Resolve repo root as the parent of the current script folder
+    $repoRoot = dirname(__DIR__);  // one level up from adapters folder
+    $reportDir = $repoRoot . "/auditreports";
+
+    if (!is_dir($reportDir)) {
+        mkdir($reportDir, 0777, true);
+    }
+    if (!is_dir($reportDir)) { mkdir($reportDir, 0777, true); }
+    $auditFile = $reportDir . "/migration_log_" . $adapterName . "_" . date("Ymd_His") . ".csv";
+    $fp = fopen($auditFile, "w");
+    fputcsv($fp, ["rowIndex", "name", "projectGroup", "message", "result"]);
+
+    foreach ($lines as $lineIndex => $line) {
         $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
         if (count($fields) !== count($normalizedHeader)) {
-            fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
+            $msg = "Skipping row with mismatched column count";
+            fwrite(STDERR, "⚠️ $msg: " . json_encode($fields) . "\n");
+            log_audit($fp, $lineIndex+2, "", "", $msg, "Skipped");
             continue;
         }
 
         $row = array_combine($normalizedHeader, $fields);
         if (!$row) {
-            fwrite(STDERR, "⚠️ Skipping invalid row: " . json_encode($row) . "\n");
+            $msg = "Invalid row";
+            fwrite(STDERR, "⚠️ $msg\n");
+            log_audit($fp, $lineIndex+2, "", "", $msg, "Skipped");
             continue;
         }
 
-        if ($mode === 'insert' && empty(trim($row["name"] ?? ""))) {
-            fwrite(STDERR, "⚠️ Skipping insert row missing mandatory field (name): " . json_encode($row) . "\n");
-            continue;
-        }
-
-        // === Update mode: require ID ===
-        $id = $mode === 'update' ? normalizeEmpty($row["id"] ?? "") : null;
-        if ($mode === 'update' && !$id) {
-            fwrite(STDERR, "⚠️ Skipping update row with missing ID\n");
-            continue;
-        }
-
-        // === Group Lookup ===
+        // Group lookup
         $projectGroupIntegers = [];
+        $warnings = [];
+        $invalidGroup = false;
         if (!empty($row["projectGroup"])) {
-            $group_labels = array_map('trim', explode(',', $row["projectGroup"]));
-            foreach ($group_labels as $label) {
-                if (isset($lookup_map[$label])) {
-                    $projectGroupIntegers[] = intval($lookup_map[$label]);
-                } else {
-                    fwrite(STDERR, "⚠️ Unknown group label: '{$label}'\n");
+            foreach (array_map('trim', explode(',', $row["projectGroup"])) as $label) {
+                if ($label === "") continue;
+                if (ctype_digit($label)) { $projectGroupIntegers[] = intval($label); }
+                elseif (isset($lookup_map[$label])) { $projectGroupIntegers[] = intval($lookup_map[$label]); }
+                else {
+                    $invalidGroup = true;
+                    $warnings[] = "Lookup_map value '{$label}' not found";
+                    fwrite(STDERR, "⚠️ Lookup_map value '{$label}' not found\n");
                 }
             }
         }
         $projectGroupIntegers = array_unique($projectGroupIntegers);
 
-        // === Location Parsing ===
-        $address_location = "";
-        if (!empty($row["address.location"]) && strpos($row["address.location"], ",") !== false) {
-            list($latitude, $longitude) = explode(",", $row["address.location"], 2);
-            $address_location = [
-                "latitude" => trim($latitude),
-                "longitude" => trim($longitude),
-                "type" => "Point"
-            ];
+        if ($invalidGroup) {
+            log_audit($fp, $lineIndex+2, $row["name"] ?? "", $row["projectGroup"] ?? "", implode("; ", $warnings), "Skipped");
+            continue;
         }
 
-        // === Build Payload ===
+        // Build payload
         $values = [];
+        foreach (["name","notes","projectsourceid","timeZone"] as $field)
+            if (hasColumn($field, $normalizedHeader)) $values[$field] = normalizeEmpty($row[$field] ?? "");
 
-        if (hasColumn("name", $normalizedHeader)) {
-            $values["name"] = normalizeEmpty($row["name"] ?? "");
-        }
-        if (hasColumn("notes", $normalizedHeader)) {
-            $values["notes"] = normalizeEmpty($row["notes"] ?? "");
-        }
-        if (hasColumn("projectsourceid", $normalizedHeader)) {
-            $values["projectsourceid"] = normalizeEmpty($row["projectsourceid"] ?? "");
-        }
-        if (hasColumn("timeZone", $normalizedHeader)) {
-            $values["timeZone"] = normalizeEmpty($row["timeZone"] ?? "");
-        }
-        if (hasColumn("projectGroup", $normalizedHeader)) {
-            $values["projectGroup"] = [
-                "assign" => $projectGroupIntegers,
-                "unassign" => []
-            ];
-        }
+        if (hasColumn("projectGroup", $normalizedHeader))
+            $values["projectGroup"] = ["assign" => $projectGroupIntegers, "unassign" => []];
 
-        // === Address block ===
+        // Address block - Flattened address fields directly into values
         $address = [];
         foreach (["address.address", "address.suburb", "address.state", "address.postCode", "address.country"] as $field) {
             if (hasColumn($field, $normalizedHeader)) {
-                $address[explode(".", $field)[1]] = normalizeEmpty($row[$field] ?? "");
+                $values[$field] = normalizeEmpty($row[$field] ?? "");
             }
         }
+
         if (hasColumn("address.location", $normalizedHeader)) {
-            $address["location"] = $address_location;
+            $values["address.location"] = normalizeEmpty($row["address.location"] ?? "");
         }
-        if (hasColumn("address.autoGeocode", $normalizedHeader)) {
-            $address["autoGeocode"] = filter_var($row["address.autoGeocode"] ?? false, FILTER_VALIDATE_BOOLEAN);
-        }
-        if (!empty($address)) {
-            $values["address"] = $address;
+        
+        // Address.location handling: split combined "lat,long" string into structured object
+        if (hasColumn("address.location", $normalizedHeader)) {
+            $loc = normalizeEmpty($row["address.location"] ?? "");
+            if ($loc !== "" && strpos($loc, ",") !== false) {
+                list($lat, $lon) = explode(",", $loc, 2);
+                $values["address.location"] = [
+                    "latitude" => trim($lat),
+                    "longitude" => trim($lon),
+                    "type" => "Point"
+                ];
+            } else {
+                // fallback: keep as string if not in "lat,long" format
+                $values["address.location"] = $loc;
+            }
         }
 
-        // Always include timestamps
+        if (hasColumn("address.autoGeocode", $normalizedHeader)) {
+            $values["address.autoGeocode"] = filter_var($row["address.autoGeocode"] ?? false, FILTER_VALIDATE_BOOLEAN);
+        }
+        if (!empty($address)) $values["address"] = $address;
+
+
+        // Timestamps
         $values["dateStart"] = $timestamp;
         $values["dateEnd"] = $timestamp;
 
-        $record = [
-            "dataVersion" => 1,
-            "Values" => $values
-        ];
-        if ($mode === 'update') { //Update
-            $record["id"] = $id;
-        }
-        else { // Insert mode
-            $record["id"] = $id;
-            $record["projectOperations"] = [
-                "Relate" => [],
-                "Unrelate" => []
-            ];
+        // Skip record creation if missing name (optional)
+        if (empty($values["name"])) {
+            log_audit($fp, $lineIndex+2, "", implode(",", $projectGroupIntegers), "Missing mandatory field (name)", "Skipped");
+            continue;
         }
 
+        $record = ["dataVersion" => 1, "values" => $values];
 
+        if ($mode === "update" && hasColumn("id", $normalizedHeader)) {
+            $record["meta"] = ["id" => normalizeEmpty($row["id"] ?? "")];
+        }
         $records[] = $record;
+
+        // Log success
+        log_audit($fp, $lineIndex+2, $values["name"] ?? "", implode(",", $projectGroupIntegers), "", "Success");
     }
+
+    fclose($fp);
+    fwrite(STDERR, "🧾 Audit log written to $auditFile\n");
+
 } catch (Throwable $e) {
     fwrite(STDERR, "❌ Fatal error: " . $e->getMessage() . "\n");
     echo json_encode(["error" => "Adapter execution failed", "details" => $e->getMessage()]);
     exit(1);
 }
 
-// === Emit Output ===
+// Emit output
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
@@ -220,12 +210,12 @@ if ($json === false) {
     echo json_encode(["error" => "JSON encoding failed", "details" => $error]);
     exit(1);
 }
+if (!is_array($records) || empty($records)) { fwrite(STDERR, "❌ No valid records generated\n"); }
 
-if (!is_array($records) || empty($records)) {
-    fwrite(STDERR, "❌ No valid records generated\n");
-}
+// Save JSON payload into auditreports with timestamped name
+$payloadFile = $reportDir . "/payload_projects_" . date("Ymd_His") . ".json";
+file_put_contents($payloadFile, $json);
 
-file_put_contents("payload.json", $json);
 echo $json . "\n";
-fwrite(STDERR, "📁 Wrote insert rows to: " . realpath($insertPath) . "\n");
-fwrite(STDERR, "📁 Wrote update rows to: " . realpath($updatePath) . "\n");
+fwrite(STDERR, "🧾 Payload written to $payloadFile\n");
+fwrite(STDERR, "🧾 Writing detailed audit to $auditFile\n");
