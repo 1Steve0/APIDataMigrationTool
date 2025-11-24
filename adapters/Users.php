@@ -7,6 +7,9 @@ fwrite(STDERR, "🛠 Adapter started\n");
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
 }
+function log_audit($fp,$idx,$first,$last,$email,$msg,$result){
+    fputcsv($fp,[$idx,$first??"", $last??"", $email??"", $msg, $result]);
+}
 
 // === Input Path and Mode ===
 $inputPath = trim($argv[1] ?? '', " \t\n\r\0\x0B\"'");
@@ -25,64 +28,74 @@ if (count($lines) < 2) {
     exit(1);
 }
 
+// === Audit setup ===
+$adapterName = "users";
+$repoRoot = dirname(__DIR__);
+$reportDir = $repoRoot . "/auditreports";
+if (!is_dir($reportDir)) { mkdir($reportDir, 0777, true); }
+$auditFile = $reportDir . "/migration_log_" . $adapterName . "_" . date("Ymd_His") . ".csv";
+$fp = fopen($auditFile, "w");
+fputcsv($fp, ["rowIndex","firstName","lastName","email","message","result"]);
+
 // === Header Mapping ===
 $headerMap = [
-    "id"=> "id",
-    "source id (admin only)" => "usersourceid"
-    // "first name"             => "firstName",
-    // "last name"              => "lastName",
-    // "position"               => "position",
-    // "department"             => "department",
-    // "organisation"           => "organisation",
-    // "organisation name"      => "organisation",
-    // "phone"                  => "phone",
-    // "mobile"                 => "mobile",
-    // "fax"                    => "fax",
-    // "email"                  => "email",
-    // "login"                  => "login"
+    "id"                   => "id",
+    "source id (admin only)" => "userssourceid",
+    "first name"           => "firstName",
+    "last name"            => "lastName",
+    "position"             => "position",
+    "department"           => "department",
+    "organisation"         => "organisation",
+    "organisation name"    => "organisation",
+    "phone"                => "phone",
+    "mobile"               => "mobile",
+    "email"                => "email",
+    "sendonboardingemail"  => "sendonboardingemail",
+    "system role"          => "System Role"
+];
+
+$roleMap = [
+    "StandardUser"            => "StandardUser",
+    "EnterpriseAdministrator" => "EnterpriseAdministrator",
+    "Admin"                   => "EnterpriseAdministrator",
+    "User"                    => "StandardUser"
 ];
 
 // === Normalize Header ===
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
-$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]); // Strip BOM
+$rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]);
 $lcHeaderMap = array_change_key_case($headerMap, CASE_LOWER);
 
 $normalizedHeader = [];
-$ignoredColumns = [];
 foreach ($rawHeader as $idx => $col) {
     $lk = strtolower(trim($col));
     if ($lk === 'id') {
         $normalizedHeader[] = '__ID__';
-        $ignoredColumns[$idx] = true;
         continue;
     }
     $normalizedHeader[] = $lcHeaderMap[$lk] ?? trim($col);
-}
-
-// === Validate Columns ===
-fwrite(STDERR, "🧾 Raw header: " . implode(", ", $rawHeader) . "\n");
-$expected = array_values(array_unique($lcHeaderMap));
-$missing = array_diff($expected, $normalizedHeader);
-if ($missing) {
-    fwrite(STDERR, "⚠️ Warning: Missing expected columns: " . implode(", ", $missing) . "\n");
 }
 
 // === Build Records ===
 $records = [];
 $skipped = 0;
 
-foreach ($lines as $line) {
+foreach ($lines as $lineIndex => $line) {
     $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
-
     if (count($fields) !== count($normalizedHeader)) {
-        fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
+        $msg = "Mismatched column count";
+        fwrite(STDERR, "⚠️ $msg: " . json_encode($fields) . "\n");
+        log_audit($fp,$lineIndex+2,"","","",$msg,"Skipped");
         $skipped++;
         continue;
     }
 
     $row = array_combine($normalizedHeader, $fields);
-    if (empty($row["__ID__"])) {
-        fwrite(STDERR, "⚠️ Skipping row with missing ID: " . json_encode($row) . "\n");
+
+    if ($migrationType === "update" && empty($row["__ID__"])) {
+        $msg = "Missing ID for update";
+        fwrite(STDERR, "⚠️ $msg\n");
+        log_audit($fp,$lineIndex+2,$row["firstName"]??"",$row["lastName"]??"",$row["email"]??"",$msg,"Skipped");
         $skipped++;
         continue;
     }
@@ -90,7 +103,31 @@ foreach ($lines as $line) {
     if ($migrationType === "insert" && (
         empty(trim($row["firstName"] ?? "")) || empty(trim($row["email"] ?? ""))
     )) {
-        fwrite(STDERR, "⚠️ Skipping row missing mandatory fields (firstName/email): " . json_encode($row) . "\n");
+        $msg = "Missing mandatory fields (firstName/email)";
+        fwrite(STDERR, "⚠️ $msg\n");
+        log_audit($fp,$lineIndex+2,$row["firstName"]??"",$row["lastName"]??"",$row["email"]??"",$msg,"Skipped");
+        $skipped++;
+        continue;
+    }
+
+    // Resolve roles
+    $resolvedRoles = [];
+    $rawRoles = $row["System Role"] ?? "";
+    $normalizedRoles = str_replace([";", "|"], ",", $rawRoles);
+    $roleParts = array_map('trim', explode(",", $normalizedRoles));
+    $unknownRoles = [];
+    foreach ($roleParts as $role) {
+        if ($role === "") continue;
+        if (isset($roleMap[$role])) {
+            $resolvedRoles[] = $roleMap[$role];
+        } else {
+            $unknownRoles[] = $role;
+        }
+    }
+    if (!empty($unknownRoles)) {
+        $msg = "Unknown role(s): " . implode(", ", $unknownRoles);
+        fwrite(STDERR, "❌ $msg\n");
+        log_audit($fp,$lineIndex+2,$row["firstName"]??"",$row["lastName"]??"",$row["email"]??"",$msg,"Skipped");
         $skipped++;
         continue;
     }
@@ -99,62 +136,74 @@ foreach ($lines as $line) {
         $record = [
             "dataVersion" => 1,
             "stereotypeOperations" => [
-                "Relate" => [],
+                "Relate" => $resolvedRoles,
                 "Unrelate" => []
             ],
-            "sendOnboardingEmail" => True,
-            "values" => [
-                // "usersourceid" => $row["id"]
-        ],
-
+            "SendOnboardingEmail" => !empty($row["sendonboardingemail"])
+                ? filter_var($row["sendonboardingemail"], FILTER_VALIDATE_BOOLEAN)
+                : false,
+            "values" => [],
             "meta" => [
-                "id" => $row["__ID__"] ?? null,  // 👈 Required for PATCH
-                "rowIndex" => count($records) + 2, // +2 accounts for 0-based index + header row
+                "id" => $row["__ID__"] ?? null,
+                "rowIndex" => count($records) + 2,
                 "source" => $row
-                ]
+            ]
         ];
 
         if ($migrationType === "update" && !empty($row["__ID__"])) {
             $record["id"] = $row["__ID__"];
         }
 
-        foreach ($normalizedHeader as $idx => $key) {
-            if ($key === '__ID__') continue;
-            if (in_array($key, $expected, true) && array_key_exists($key, $row)) {
+        $record["values"]["userssourceid"]   = normalizeEmpty($row["userssourceid"] ?? "");
+        $record["values"]["userstatus"]     = 0;
+        $record["values"]["useLegacyLogin"] = false;
+        $record["values"]["notes"]          = "";
+
+        // Only allow fields that the API expects
+        $allowedKeys = [
+            "userssourceid","firstName","lastName","position","department",
+            "organisation","phone","mobile","email"
+        ];
+
+        foreach ($allowedKeys as $key) {
+            if (array_key_exists($key, $row)) {
                 $record["values"][$key] = normalizeEmpty($row[$key]);
             }
         }
-        // if ($migrationType === "update"){
-        //     $record["values"]["useLegacyLogin"] = $record["values"]["useLegacyLogin"] ?? false;
-        //     $record["values"]["login"] = $record["values"]["login"] ?? "";
-        // }
-
         $records[] = $record;
+        log_audit($fp,$lineIndex+2,$row["firstName"]??"",$row["lastName"]??"",$row["email"]??"","Success","Success");
 
-        if (getenv('ADAPTER_DEBUG') === '1') {
-            fwrite(STDERR, "📦 Packet debug: " . json_encode($record, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . "\n");
-        }
     } catch (Exception $e) {
-        fwrite(STDERR, "❌ Exception while building record: " . $e->getMessage() . "\n");
+        $msg = "Exception: " . $e->getMessage();
+        fwrite(STDERR, "❌ $msg\n");
+        log_audit($fp,$lineIndex+2,$row["firstName"]??"",$row["lastName"]??"",$row["email"]??"",$msg,"Skipped");
         $skipped++;
         continue;
     }
 }
 
+fclose($fp);
+fwrite(STDERR, "🧾 Audit log written to $auditFile\n");
+
 // === Emit Output ===
 $output = [
     "recordCount" => count($records),
     "generatedAt" => date("c"),
-    "adapter_key"=> "users",
+    "adapter_key" => "users",
     "records" => $records
 ];
 
-fwrite(STDERR, "🔍 Parsed row: " . json_encode($row) . "\n");
-fwrite(STDERR, "🔎 Extracted ID: " . ($row["__ID__"] ?? 'null') . "\n");
 fwrite(STDERR, "⚠️ Skipped {$skipped} invalid rows\n");
 $json = json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if ($json === false) {
     fwrite(STDERR, "❌ JSON encoding failed: " . json_last_error_msg() . "\n");
     exit(1);
 }
+
+// Save JSON payload into auditreports with timestamped name
+$payloadFile = $reportDir . "/payload_users_" . date("Ymd_His") . ".json";
+file_put_contents($payloadFile, $json);
+
 echo $json . "\n";
+fwrite(STDERR, "🧾 Payload written to $payloadFile\n");
+fwrite(STDERR, "🧾 Writing detailed audit to $auditFile\n");

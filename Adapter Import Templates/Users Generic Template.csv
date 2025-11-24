@@ -1,0 +1,4 @@
+﻿Id,Source Id(Admin Only),First Name,Last Name,Position,Department,Organisation,Phone,Mobile,Email,SendOnBoardingEmail,OAuth Identifier,Visibility,Deleted,Descriptor,System Role
+,204,Ryan,Smith,Project Manager,,Main Company,,400000000,ryan@nemail.com,FALSE,,2,No,My discription 1,EnterpriseAdministrator;StandardUser
+,203,Luke,Jones,Community Engagement Advisor,,Subcontractor2,,400000000,luke@ged.com,FALSE,,2,No,My discription 2,StandardUser
+,202,Mary,Mattoch,Civil Engineer,,Contractor1,,400000000,Mary@ehd.com,FALSE,,2,No,My discription 3,EnterpriseAdministrator
