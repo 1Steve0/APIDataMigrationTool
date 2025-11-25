@@ -4,13 +4,38 @@ ini_set('log_errors', 1);
 ini_set('error_log', 'php://stderr');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING);
 
-$mode = strtolower($argv[2] ?? 'insert'); // default to insert
+$mode = strtolower($argv[2] ?? 'insert'); // insert | update
 
 function normalizeEmpty($value) {
     return is_null($value) || (is_string($value) && trim($value) === "") ? "" : $value;
 }
 function hasColumn($key, $normalizedHeader) {
     return in_array($key, $normalizedHeader);
+}
+function transformProjects($rawProjects, $projectIds, $projectsTransform) {
+    $relateIds = [];
+    if (!empty($rawProjects)) {
+        $tokens = preg_split('/[;,]/', $rawProjects); // split on , and ;
+        foreach ($tokens as $token) {
+            $proj = trim($token);
+            if ($proj === "") continue;
+
+            if (ctype_digit($proj)) { // numeric IDs direct
+                $relateIds[] = (int)$proj;
+                continue;
+            }
+            if (isset($projectIds[$proj])) { // name from CSV lookup
+                $relateIds[] = $projectIds[$proj];
+                continue;
+            }
+            if (isset($projectsTransform[$proj])) { // hard-coded map fallback
+                $relateIds[] = $projectsTransform[$proj];
+                continue;
+            }
+            fwrite(STDERR, "⚠️ Unknown project reference: '{$proj}'\n");
+        }
+    }
+    return array_values(array_unique($relateIds));
 }
 
 // === Input Path ===
@@ -27,31 +52,9 @@ if (count($lines) < 2) {
     exit(1);
 }
 
-// === Load Team Lookup ===
-$lookup_path = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Teams.csv";
-$lookup_map = [];
-
-if (($handle = fopen($lookup_path, "r")) !== false) {
-    $header = fgetcsv($handle);
-    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
-    while (($data = fgetcsv($handle)) !== false) {
-        $row = array_combine($header, $data);
-        $team_name = trim($row["Name"]);
-        $team_id = trim($row["Id"]);
-        if ($team_name !== "") {
-            if (isset($lookup_map[$team_name])) {
-                fwrite(STDERR, "⚠️ Duplicate team name in lookup: '{$team_name}'\n");
-            }
-            $lookup_map[$team_name] = $team_id;
-        }
-    }
-    fclose($handle);
-}
-
 // === Load Project IDs for Team assignment ===
 $projectIdPath = "C:\\Users\\steve\\OneDrive\\Documents\\Social Pinpoint\\Project\\SWC\\CM ID Lookup\\Project.csv";
 $projectIds = [];
-
 if (is_readable($projectIdPath)) {
     $projectLines = file($projectIdPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($projectLines as $line) {
@@ -69,86 +72,90 @@ if (is_readable($projectIdPath)) {
 // === Header Mapping ===
 $headerMap = [
     "Id" => "id",
+    "Source Id (Admin Only)" => "teamssourceid",
     "Name" => "name",
     "Description" => "description",
-    "Projects" => "projects",
-    "Source Id (Admin Only)" => "teamssourceid"
+    "Projects" => "projects"
+];
+
+// Hard-coded transforms (fallback names → IDs)
+$projectsTransform = [
+    "Glasshouse Mountains6" => 14,
+    "Glasshouse Mountains5" => 13,
+    "Manfield Road Upgrade2" => 12
 ];
 
 // === Normalize Header ===
 $rawHeader = array_map('trim', str_getcsv(array_shift($lines), ",", '"', "\\"));
 $rawHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', $rawHeader[0]);
+$normalizedHeader = array_map(function ($col) use ($headerMap) { return $headerMap[$col] ?? $col; }, $rawHeader);
 
-$normalizedHeader = array_map(function ($col) use ($headerMap) {
-    return $headerMap[$col] ?? $col;
-}, $rawHeader);
-
-// === Validate Columns ===
+// === Validate Columns (warn-only)
 $expected = array_values($headerMap);
 $missing = array_diff($expected, $normalizedHeader);
 if ($missing) {
     fwrite(STDERR, "⚠️ Warning: Missing expected columns: " . implode(", ", $missing) . "\n");
 }
 
+// === Audit setup ===
+$adapterName = "teams";
+$repoRoot = dirname(__DIR__);              // one level up from adapters folder
+$reportDir = $repoRoot . "/auditreports";  // same auditreports folder
+if (!is_dir($reportDir)) { mkdir($reportDir, 0777, true); }
+
+$auditFile = $reportDir . "/migration_log_" . $adapterName . "_" . date("Ymd_His") . ".csv";
+$fp = fopen($auditFile, "w");
+if ($fp === false) {
+    fwrite(STDERR, "❌ Could not open audit log file: $auditFile\n");
+    exit(1);
+}
+fputcsv($fp, ["rowIndex","mode","id","teamssourceid","name","description","projectsRelate"]);
+
 // === Build Records ===
 $records = [];
-$timestamp = date("Y-m-d\TH:i:s");
+$rowIndex = 0;
 
 try {
     foreach ($lines as $line) {
+        $rowIndex++;
         $fields = array_map('trim', str_getcsv($line, ",", '"', "\\"));
         if (count($fields) !== count($normalizedHeader)) {
-            fwrite(STDERR, "⚠️ Skipping row with mismatched column count: " . json_encode($fields) . "\n");
+            fwrite(STDERR, "⚠️ Skipping row {$rowIndex}: mismatched column count\n");
             continue;
         }
 
         $row = array_combine($normalizedHeader, $fields);
-        if (!$row || !isset($row["name"])) {
-            fwrite(STDERR, "⚠️ Skipping invalid row: " . json_encode($row) . "\n");
+        if (!$row) {
+            fwrite(STDERR, "⚠️ Skipping row {$rowIndex}: invalid row shape\n");
             continue;
         }
 
-        // === Update mode: require ID ===
+        // Update mode: require id
         $id = $mode === 'update' ? normalizeEmpty($row["id"] ?? "") : null;
         if ($mode === 'update' && !$id) {
-            fwrite(STDERR, "⚠️ Skipping update row with missing ID\n");
+            fwrite(STDERR, "⚠️ Skipping row {$rowIndex}: missing ID for update\n");
             continue;
         }
 
-        // === Resolve project IDs ===
-        $relateIds = [];
-        if (!empty($row["projects"])) {
-            $projectNames = array_map('trim', explode(',', $row["projects"]));
-            foreach ($projectNames as $projName) {
-                if (isset($projectIds[$projName])) {
-                    $relateIds[] = $projectIds[$projName];
-                } else {
-                    fwrite(STDERR, "⚠️ Unknown project name: '{$projName}'\n");
-                }
-            }
-        }
+        // Resolve project IDs via transform
+        $relateIds = transformProjects($row["projects"] ?? "", $projectIds, $projectsTransform);
 
-        // === Build Payload ===
+        // Build Values
         $values = [];
+        if (hasColumn("name", $normalizedHeader))          $values["name"] = normalizeEmpty($row["name"] ?? "");
+        if (hasColumn("description", $normalizedHeader))   $values["description"] = normalizeEmpty($row["description"] ?? "");
+        if (hasColumn("teamssourceid", $normalizedHeader)) $values["teamssourceid"] = normalizeEmpty($row["teamssourceid"] ?? "");
 
-        if (hasColumn("name", $normalizedHeader)) {
-            $values["name"] = normalizeEmpty($row["name"] ?? "");
-        }
-        if (hasColumn("description", $normalizedHeader)) {
-            $values["description"] = normalizeEmpty($row["description"] ?? "");
-        }
-        if (hasColumn("teamssourceid", $normalizedHeader)) {
-            $values["teamssourceid"] = normalizeEmpty($row["teamssourceid"] ?? "");
-        }
-        if (hasColumn("teamssourceid", $normalizedHeader)) {
-            $values["teamssourceid"] = normalizeEmpty($row["teamssourceid"] ?? "");
-        }
-
-        // Always include timestamps
-        // $values["dateStart"] = $timestamp;
-        // $values["dateEnd"] = $timestamp;
+        // Emit meta for logging and ID handling
+        $meta = [
+            "rowIndex" => $rowIndex,
+            "id" => $mode === 'update' ? $id : "",
+            "teamssourceid" => $values["teamssourceid"] ?? "",
+            "name" => $values["name"] ?? ""
+        ];
 
         $record = [
+            "meta" => $meta,
             "DataVersion" => 1,
             "ProjectOperations" => [
                 "Relate" => $relateIds,
@@ -156,17 +163,33 @@ try {
             ],
             "Values" => $values
         ];
+
         if ($mode === 'update') {
             $record["id"] = $id;
         }
 
+        fwrite(STDERR, "🔧 Row {$rowIndex} built (mode={$mode}): " . json_encode($record) . "\n");
         $records[] = $record;
+
+        // Write to CSV audit log
+        fputcsv($fp, [
+            $rowIndex,
+            $mode,
+            $id ?? "",
+            $values["teamssourceid"] ?? "",
+            $values["name"] ?? "",
+            $values["description"] ?? "",
+            implode(";", $relateIds)
+        ]);
     }
 } catch (Throwable $e) {
     fwrite(STDERR, "❌ Fatal error: " . $e->getMessage() . "\n");
     echo json_encode(["error" => "Adapter execution failed", "details" => $e->getMessage()]);
     exit(1);
 }
+
+fclose($fp);
+fwrite(STDERR, "🧾 Audit log written to $auditFile\n");
 
 // === Emit Output ===
 $output = [
@@ -188,5 +211,9 @@ if (!is_array($records) || empty($records)) {
     fwrite(STDERR, "❌ No valid records generated\n");
 }
 
-file_put_contents("payload.json", $json);
+// Save JSON payload into auditreports with timestamped name
+$payloadFile = $reportDir . "/payload_" . $adapterName . "_" . date("Ymd_His") . ".json";
+file_put_contents($payloadFile, $json);
+fwrite(STDERR, "🧾 Payload written to $payloadFile\n");
+
 echo $json . "\n";

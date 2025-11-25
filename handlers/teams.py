@@ -16,6 +16,7 @@
 #   }
 # }
 
+
 # handlers/teams.py
 import requests
 from helpers.logger import MigrationStats, build_log_entry
@@ -33,19 +34,24 @@ def handle(payload, migration_type, api_url, auth_token, entity):
             continue
 
         meta = record.get("meta", {})
+        # Adapter emits capitalized keys; we map to the packet keys expected by the API
         packet = {
             "dataVersion": record.get("DataVersion", 1),
             "projectOperations": record.get("ProjectOperations", {}),
-            "values": record.get("values", {})
+            "values": record.get("Values", {})
         }
 
         values = packet["values"]
-        if not values.get("name"):
+
+        # Optional lightweight validation; remove if you want the API to fully decide
+        if "name" not in values or str(values.get("name", "")).strip() == "":
             stats.log_skip(i, meta, "Missing required field: name")
             continue
 
+        # ID resolution: prefer meta.id, fall back to values.id or teamssourceid
+        record_id = None
         if migration_type == "update":
-            record_id = meta.get("id") or values.get("id")
+            record_id = meta.get("id") or values.get("id") or values.get("teamssourceid")
             if not record_id:
                 stats.log_skip(i, meta, "Missing ID for update")
                 continue
@@ -56,15 +62,18 @@ def handle(payload, migration_type, api_url, auth_token, entity):
             method = "POST"
 
         def get_log_field(field):
+            # enable build_log_entry to extract meta fields for audit CSVs
             return meta.get(field, "")
 
         def get_record_id():
-            return record_id if migration_type == "update" else values.get("id") or meta.get("teamssourceid", "")
+            return record_id if migration_type == "update" else values.get("id") or values.get("teamssourceid", "")
 
         log_entry = build_log_entry(i, method, endpoint, record, get_log_field, get_record_id)
 
         try:
+            print(f"🔧 Row {i}: {method} {endpoint} (team '{values.get('name','')}', source '{values.get('teamssourceid','')}')\n{packet}")
             response = requests.request(method, endpoint, headers=headers, json=packet, timeout=180)
+            print(f"📦 Response body (row {i}): {response.text}")
             if response.status_code in [200, 201, 204]:
                 stats.log_success(i, log_entry)
             else:
