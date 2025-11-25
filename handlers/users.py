@@ -7,7 +7,7 @@
 #     "Unrelate": []
 #   },
 #   "Values": {
-#     "usersourceid": "196",
+#     "userssourceid": "196",
 #     "email": "Natalia.Morawski@aecom.com",
 #     "userstatus": 0,
 #     "useLegacyLogin": false,
@@ -30,7 +30,7 @@
 #         "Unrelate": []
 #     },
 #     "values": {
-#         "usersourceid": "9999"
+#         "userssourceid": "9999"
 #     }
 # }
 import requests
@@ -72,6 +72,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
 
         if migration_type == "update":
             record_id = meta.get("id") or values.get("id")
+            packet["values"].pop("email", None) # The API has a rule, you cannot UPDATE a record with an email address found in the database means whole update is rejected
             if not record_id:
                 stats.log_skip(i, meta, "Missing ID for update")
                 continue
@@ -87,7 +88,7 @@ def handle(payload, migration_type, api_url, auth_token, entity):
             return meta.get(field, "")
 
         def get_record_id():
-            return record_id if migration_type == "update" else values.get("id") or values.get("usersourceid", "")
+            return record_id if migration_type == "update" else values.get("id") or values.get("userssourceid", "")
 
         log_entry = build_log_entry(i, method, endpoint, record, get_log_field, get_record_id)
 
