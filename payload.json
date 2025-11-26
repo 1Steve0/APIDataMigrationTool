@@ -1,199 +1,116 @@
 {
-    "recordCount": 16,
-    "generatedAt": "2025-11-04T04:20:23+00:00",
-    "valueKey": "Values",
+    "recordCount": 5,
+    "generatedAt": "2025-11-25T02:59:53+00:00",
+    "adapter_key": "teams",
     "records": [
         {
+            "meta": {
+                "rowIndex": 1,
+                "id": "",
+                "teamssourceid": "25",
+                "name": "Customer and Stakeholder Engagement"
+            },
             "DataVersion": 1,
             "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "_All Administrators",
-                "teamssourceid": "7"
-            },
-            "id": "13"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "_All Projects Team",
-                "teamssourceid": "9"
-            },
-            "id": "114"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Asset Lifecycle",
-                "teamssourceid": "16"
-            },
-            "id": "14"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
+                "Relate": [
+                    14,
+                    13
+                ],
                 "Unrelate": []
             },
             "Values": {
                 "name": "Customer and Stakeholder Engagement",
-                "teamssourceid": "1"
-            },
-            "id": "115"
+                "description": "Customer and Stakeholder Engagement Description XXXXX",
+                "teamssourceid": "25"
+            }
         },
         {
+            "meta": {
+                "rowIndex": 2,
+                "id": "",
+                "teamssourceid": "26",
+                "name": "South Team X"
+            },
             "DataVersion": 1,
             "ProjectOperations": {
-                "Relate": [],
+                "Relate": [
+                    14,
+                    13
+                ],
                 "Unrelate": []
             },
             "Values": {
-                "name": "Governance & Assurance",
-                "teamssourceid": "14"
-            },
-            "id": "116"
+                "name": "South Team X",
+                "description": "South Team Description",
+                "teamssourceid": "26"
+            }
         },
         {
+            "meta": {
+                "rowIndex": 3,
+                "id": "",
+                "teamssourceid": "27",
+                "name": "North Team"
+            },
             "DataVersion": 1,
             "ProjectOperations": {
-                "Relate": [],
+                "Relate": [
+                    14,
+                    13,
+                    12
+                ],
                 "Unrelate": []
             },
             "Values": {
-                "name": "Y_DDP - AECOM",
-                "teamssourceid": "20"
-            },
-            "id": "184"
+                "name": "North Team",
+                "description": "North Team Description",
+                "teamssourceid": "27"
+            }
         },
         {
+            "meta": {
+                "rowIndex": 4,
+                "id": "",
+                "teamssourceid": "28",
+                "name": "All Managers Y"
+            },
             "DataVersion": 1,
             "ProjectOperations": {
-                "Relate": [],
+                "Relate": [
+                    14,
+                    13,
+                    12,
+                    11
+                ],
                 "Unrelate": []
             },
             "Values": {
-                "name": "Y_DDP - GHD",
-                "teamssourceid": "15"
-            },
-            "id": "185"
+                "name": "All Managers Y",
+                "description": "All Managers Description",
+                "teamssourceid": "28"
+            }
         },
         {
+            "meta": {
+                "rowIndex": 5,
+                "id": "",
+                "teamssourceid": "29",
+                "name": "All Admin"
+            },
             "DataVersion": 1,
             "ProjectOperations": {
-                "Relate": [],
+                "Relate": [
+                    14,
+                    13,
+                    12
+                ],
                 "Unrelate": []
             },
             "Values": {
-                "name": "Y_Major Projects",
-                "teamssourceid": "19"
-            },
-            "id": "8"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Y_Planning Partner",
-                "teamssourceid": "4"
-            },
-            "id": "9"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Y_RDP South - D4C",
-                "teamssourceid": "2"
-            },
-            "id": "186"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Abergeldie",
-                "teamssourceid": "6"
-            },
-            "id": "182"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Comdain",
-                "teamssourceid": "3"
-            },
-            "id": "27"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Interflow",
-                "teamssourceid": "17"
-            },
-            "id": "45"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Jacobs",
-                "teamssourceid": "8"
-            },
-            "id": "181"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Metrocorp",
-                "teamssourceid": "18"
-            },
-            "id": "46"
-        },
-        {
-            "DataVersion": 1,
-            "ProjectOperations": {
-                "Relate": [],
-                "Unrelate": []
-            },
-            "Values": {
-                "name": "Z_EXTERNAL CONTRACTOR - Monadelphous",
-                "teamssourceid": "5"
-            },
-            "id": "183"
+                "name": "All Admin",
+                "description": "All Amin Description",
+                "teamssourceid": "29"
+            }
         }
     ]
 }

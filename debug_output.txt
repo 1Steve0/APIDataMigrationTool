@@ -1,160 +1,247 @@
 📄 Raw PHP Adapter Output:
 {
-  "recordCount": 3,
-  "generatedAt": "2025-11-05T08:33:38+00:00",
-  "valueKey": "values",
-  "dataVersionKey": "dataVersion",
+  "recordCount": 5,
+  "generatedAt": "2025-11-25T03:11:48+00:00",
+  "adapter_key": "teams",
   "records": [
     {
-      "dataVersion": 1,
-      "values": {
-        "department": "",
-        "email": "michaela.mcdermott@d4c.team",
-        "fax": "",
-        "firstName": "Michaela",
-        "lastName": "McDermott",
-        "mobile": "0474 880 180",
-        "notes": "",
-        "organisation": "D4C",
-        "phone": "",
-        "position": "Community Engagement Advisor",
-        "useLegacyLogin": false,
-        "usersourceid": "194"
+      "meta": {
+        "rowIndex": 1,
+        "id": "11",
+        "teamssourceid": "25",
+        "name": "Customer and Stakeholder Engagement"
       },
-      "sendOnboardingEmail": false,
-      "stereotypeOperations": {
+      "DataVersion": 1,
+      "ProjectOperations": {
         "Relate": [
-          "StandardUser"
+          14,
+          13
         ],
         "Unrelate": []
-      }
+      },
+      "Values": {
+        "name": "Customer and Stakeholder Engagement",
+        "description": "Customer and Stakeholder Engagement Description XXXXX",
+        "teamssourceid": "25"
+      },
+      "id": "11"
     },
     {
-      "dataVersion": 1,
-      "values": {
-        "department": "",
-        "email": "natalie.zekis@d4c.team",
-        "fax": "",
-        "firstName": "Natalie",
-        "lastName": "Zekis",
-        "mobile": "0408 075 452",
-        "notes": "",
-        "organisation": "D4C",
-        "phone": "",
-        "position": "Community Engagement Advisor",
-        "useLegacyLogin": false,
-        "usersourceid": "193"
+      "meta": {
+        "rowIndex": 2,
+        "id": "12",
+        "teamssourceid": "26",
+        "name": "South Team X"
       },
-      "sendOnboardingEmail": false,
-      "stereotypeOperations": {
+      "DataVersion": 1,
+      "ProjectOperations": {
         "Relate": [
-          "StandardUser"
+          14,
+          13
         ],
         "Unrelate": []
-      }
+      },
+      "Values": {
+        "name": "South Team X",
+        "description": "South Team Description",
+        "teamssourceid": "26"
+      },
+      "id": "12"
     },
     {
-      "dataVersion": 1,
-      "values": {
-        "department": "",
-        "email": "piro.chandran@sydneywater.com.au",
-        "fax": "",
-        "firstName": "Prio",
-        "lastName": "Chandran",
-        "mobile": "0429 683 142",
-        "notes": "",
-        "organisation": "Sydney Water",
-        "phone": "",
-        "position": "Project Manager",
-        "useLegacyLogin": false,
-        "usersourceid": "192"
+      "meta": {
+        "rowIndex": 3,
+        "id": "13",
+        "teamssourceid": "27",
+        "name": "North Team"
       },
-      "sendOnboardingEmail": false,
-      "stereotypeOperations": {
+      "DataVersion": 1,
+      "ProjectOperations": {
         "Relate": [
-          "StandardUser"
+          14,
+          13,
+          12
         ],
         "Unrelate": []
-      }
+      },
+      "Values": {
+        "name": "North Team",
+        "description": "North Team Description",
+        "teamssourceid": "27"
+      },
+      "id": "13"
+    },
+    {
+      "meta": {
+        "rowIndex": 4,
+        "id": "14",
+        "teamssourceid": "28",
+        "name": "All Managers Y"
+      },
+      "DataVersion": 1,
+      "ProjectOperations": {
+        "Relate": [
+          14,
+          13,
+          12,
+          11
+        ],
+        "Unrelate": []
+      },
+      "Values": {
+        "name": "All Managers Y",
+        "description": "All Managers Description",
+        "teamssourceid": "28"
+      },
+      "id": "14"
+    },
+    {
+      "meta": {
+        "rowIndex": 5,
+        "id": "15",
+        "teamssourceid": "29",
+        "name": "All Admin"
+      },
+      "DataVersion": 1,
+      "ProjectOperations": {
+        "Relate": [
+          14,
+          13,
+          12
+        ],
+        "Unrelate": []
+      },
+      "Values": {
+        "name": "All Admin",
+        "description": "All Amin Description",
+        "teamssourceid": "29"
+      },
+      "id": "15"
     }
   ]
 }
 
 🔍 Raw Row 1:
 {
-  "dataVersion": 1,
-  "values": {
-    "department": "",
-    "email": "michaela.mcdermott@d4c.team",
-    "fax": "",
-    "firstName": "Michaela",
-    "lastName": "McDermott",
-    "mobile": "0474 880 180",
-    "notes": "",
-    "organisation": "D4C",
-    "phone": "",
-    "position": "Community Engagement Advisor",
-    "useLegacyLogin": false,
-    "usersourceid": "194"
+  "meta": {
+    "rowIndex": 1,
+    "id": "11",
+    "teamssourceid": "25",
+    "name": "Customer and Stakeholder Engagement"
   },
-  "sendOnboardingEmail": false,
-  "stereotypeOperations": {
+  "DataVersion": 1,
+  "ProjectOperations": {
     "Relate": [
-      "StandardUser"
+      14,
+      13
     ],
     "Unrelate": []
-  }
+  },
+  "Values": {
+    "name": "Customer and Stakeholder Engagement",
+    "description": "Customer and Stakeholder Engagement Description XXXXX",
+    "teamssourceid": "25"
+  },
+  "id": "11"
 }
 
 🔍 Raw Row 2:
 {
-  "dataVersion": 1,
-  "values": {
-    "department": "",
-    "email": "natalie.zekis@d4c.team",
-    "fax": "",
-    "firstName": "Natalie",
-    "lastName": "Zekis",
-    "mobile": "0408 075 452",
-    "notes": "",
-    "organisation": "D4C",
-    "phone": "",
-    "position": "Community Engagement Advisor",
-    "useLegacyLogin": false,
-    "usersourceid": "193"
+  "meta": {
+    "rowIndex": 2,
+    "id": "12",
+    "teamssourceid": "26",
+    "name": "South Team X"
   },
-  "sendOnboardingEmail": false,
-  "stereotypeOperations": {
+  "DataVersion": 1,
+  "ProjectOperations": {
     "Relate": [
-      "StandardUser"
+      14,
+      13
     ],
     "Unrelate": []
-  }
+  },
+  "Values": {
+    "name": "South Team X",
+    "description": "South Team Description",
+    "teamssourceid": "26"
+  },
+  "id": "12"
 }
 
 🔍 Raw Row 3:
 {
-  "dataVersion": 1,
-  "values": {
-    "department": "",
-    "email": "piro.chandran@sydneywater.com.au",
-    "fax": "",
-    "firstName": "Prio",
-    "lastName": "Chandran",
-    "mobile": "0429 683 142",
-    "notes": "",
-    "organisation": "Sydney Water",
-    "phone": "",
-    "position": "Project Manager",
-    "useLegacyLogin": false,
-    "usersourceid": "192"
+  "meta": {
+    "rowIndex": 3,
+    "id": "13",
+    "teamssourceid": "27",
+    "name": "North Team"
   },
-  "sendOnboardingEmail": false,
-  "stereotypeOperations": {
+  "DataVersion": 1,
+  "ProjectOperations": {
     "Relate": [
-      "StandardUser"
+      14,
+      13,
+      12
     ],
     "Unrelate": []
-  }
+  },
+  "Values": {
+    "name": "North Team",
+    "description": "North Team Description",
+    "teamssourceid": "27"
+  },
+  "id": "13"
+}
+
+🔍 Raw Row 4:
+{
+  "meta": {
+    "rowIndex": 4,
+    "id": "14",
+    "teamssourceid": "28",
+    "name": "All Managers Y"
+  },
+  "DataVersion": 1,
+  "ProjectOperations": {
+    "Relate": [
+      14,
+      13,
+      12,
+      11
+    ],
+    "Unrelate": []
+  },
+  "Values": {
+    "name": "All Managers Y",
+    "description": "All Managers Description",
+    "teamssourceid": "28"
+  },
+  "id": "14"
+}
+
+🔍 Raw Row 5:
+{
+  "meta": {
+    "rowIndex": 5,
+    "id": "15",
+    "teamssourceid": "29",
+    "name": "All Admin"
+  },
+  "DataVersion": 1,
+  "ProjectOperations": {
+    "Relate": [
+      14,
+      13,
+      12
+    ],
+    "Unrelate": []
+  },
+  "Values": {
+    "name": "All Admin",
+    "description": "All Amin Description",
+    "teamssourceid": "29"
+  },
+  "id": "15"
 }
 
