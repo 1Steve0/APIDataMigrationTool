@@ -1,0 +1,77 @@
+# e.g.
+# /security/186/assignusertoteam
+# {
+# 	"userId": 370,
+#     "stereotype": "Viewer"
+# }
+import requests
+import json
+import sys
+from helpers.logger import MigrationStats, build_log_entry
+from helpers.shared_logic import build_auth_headers
+
+def handle(payload, migration_type, api_url, auth_token, entity):
+    headers = build_auth_headers(auth_token)
+    stats = MigrationStats()
+    records = payload.get("records", [])
+
+    for i, record in enumerate(records, start=1):
+        stats.total += 1
+        if not isinstance(record, dict):
+            stats.log_skip(i, {}, "Invalid record format")
+            continue
+
+        meta = record.get("meta", {})
+        # 🔄 Flatten meta["source"] into top-level fields
+        source = meta.get("source", {})
+        if isinstance(source, dict):
+            meta["user"] = source.get("user", "")
+            meta["team"] = source.get("team", "")
+        meta.pop("source", None)  # Remove nested dict to avoid CSV error
+
+        packet = {
+            "userId": record.get("userId"),
+            "stereotype": record.get("stereotype")
+        }
+
+      
+        print(f"🔍 Row {i} payload: {json.dumps(packet, indent=2)}")
+      
+        if not record.get("userId") or not record.get("stereotype", "").strip():
+            stats.log_skip(i, meta, "Missing userId or stereotype")
+            continue
+
+        method = "POST"
+        record_id = meta.get("id") or record.get("id", "")
+        endpoint = f"{api_url}/{record_id}/assignusertoteam"
+
+        def get_log_field(field):
+            return meta.get(field, "")
+
+        def get_record_id():
+            return meta.get("id") or record.get("id", "")
+
+        log_entry = build_log_entry(i, method, endpoint, record, get_log_field, get_record_id)
+        print(f"🔍 Row {i} POST to: {endpoint} with payload: {packet}")
+        sys.stdout.flush()
+
+        try:
+            response = requests.request(method, endpoint, json=packet, headers=headers, timeout=180)
+            log_entry["message"] = response.text.strip() or "No response body"
+            log_entry["error"] = ""
+            log_entry["user"] = get_log_field("user")
+            log_entry["team"] = get_log_field("team")
+
+            if response.status_code in [200, 201]:
+                stats.log_success(i, log_entry)
+            else:
+                stats.log_skip(i, log_entry, f"HTTP {response.status_code}: {response.text[:200]}")
+            print(f"📥 Response for Record {i}: {response.status_code} — {response.text[:200]}")
+        except Exception as e:
+            log_entry["message"] = str(e)
+            log_entry["error"] = str(e)
+            log_entry["user"] = get_log_field("user")
+            log_entry["team"] = get_log_field("team")
+            stats.log_skip(i, log_entry, f"Request failed: {str(e)}")
+            print(f"📥 Response for Record {i}: Exception — {str(e)[:200]}")
+    return stats.summary(), stats
